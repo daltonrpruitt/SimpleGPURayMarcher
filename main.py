@@ -62,11 +62,11 @@ class RayMarchingWindow(BasicWindow):
                         
                         
                         //vec2 sub_region = vec2( (j % 2) * 2.0 - 1.0, (j / 2) * 2.0 - 1.0 ) * 0.5;
-                       // float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
                         //vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/2;
                         
                         vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
-                        vec2 sub_pixel = gl_FragCoord.xy + sub_region;  // + vec2(random_shift)/2;
+                        float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
+                        vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
                         
                         vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height, -cam_pos.z)), 1.0);
                         for(int i = 0; i < 32; i++) {
