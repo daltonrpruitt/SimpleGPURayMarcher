@@ -50,40 +50,48 @@ class RayMarchingWindow(BasicWindow):
                     
                     float signed_dist = 1.0e6;
                     f_color = back_color;
-                    vec4 color = vec4(0.0, 0.0, 0.0, 0.0);
+                    vec4 color = vec4(0,0,0,0);
                     
                     for(int j = 0; j < 4; j++) {
                         // Make 4 rays offset uniform amount from center
-                       // vec2 sub_pixel = gl_FragCoord.xy + vec2( (j % 2) * 2.0 - 1.0, (j // 2) * 2.0 - 1.0 ) * 0.5;
-                        vec4 ray = vec4(normalize(vec3((gl_FragCoord.xy - window_size/2.0)/height, -cam_pos.z)), 1.0);
+                       vec2 sub_pixel = gl_FragCoord.xy + vec2( (j % 2) * 2.0 - 1.0, (j / 2) * 2.0 - 1.0 ) * 0.5;
+                        vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height, -cam_pos.z)), 1.0);
                         for(int i = 0; i < 32; i++) {
                             // Loop over objects
                             signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.xyz ) - (sphere.w ) ;
                             if(signed_dist < 0.001 ){
                             
+                               vec3 amb_color = back_color.rgb /100 * sphere_color.rgb;
                                 
                                 // TODO: Make shade() function, fix current math...
                                 vec3 pos_on_sphere = cam_pos + ray.xyz * ray.w;
                                 vec3 norm = normalize(pos_on_sphere - sphere.xyz);
                                 vec3 vec_to_light = normalize(light.xyz - pos_on_sphere);
                                 float lambertian = dot(vec_to_light, norm);
-                                vec3 diffuse_color = max(lambertian,0.0) * sphere_color.rgb;
-                                   
+                                
+                                vec3 diffuse_color = clamp(light.rgb * max(lambertian,0.0) * sphere_color.rgb, vec3(0,0,0), vec3(1,1,1));
+                                
+                                f_color = vec4(diffuse_color, 1.0);
+                                
                                 // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
                                 // Check if is actually reflecting the correct way
                                 vec3 reflected_vec = 2.0 * dot(vec_to_light, norm) * norm - vec_to_light;
                                 vec3 e_vec = -1.0 * ray.xyz;  // negative so facing correct way
                                 float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
-                                vec3 specular_color = light.w * light.rgb * pow(e_dot_r, 8.0);
+                                vec3 specular_color = light.w * light.rgb * pow(e_dot_r, 16.0);
     
-                                color = color + clamp(vec4(diffuse_color + specular_color, 0.0), vec4(0.0), vec4(1.0));
+                                color = color + clamp(vec4(amb_color + diffuse_color + specular_color, 0.0), vec4(0.0), vec4(1.0));
                                 
+                               break;
+                            } else if ( i >= 31 ){
+                                color = color + back_color;
                             } else {
                                 ray.w = ray.w + signed_dist;
                             }
                         }
-                    }
-                    f_color = color / 4;
+                   }
+                   f_color = color / 4.0 ;
+                   vec4 temp = sphere_color;
                     
 
                 }
@@ -96,7 +104,7 @@ class RayMarchingWindow(BasicWindow):
         #self.prog['time'].value = 0
         self.prog['sphere'].value = (0.0, 0.0, 15.0, 1.0)
         self.prog['sphere_color'].value = (0.5, 0.2, 0.7, 1.0)
-        self.prog['back_color'].value = (0.2, 0.4, 0.95, 1.0)
+        self.prog['back_color'].value = (0.8, 0.5, 0.3,  1.0)
         self.prog['light'].value = (3, 3, 10, 1)
 
 
