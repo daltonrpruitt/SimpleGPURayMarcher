@@ -42,7 +42,9 @@ class RayMarchingWindow(BasicWindow):
                 
                 out vec4 f_color;
                 
+                float rand(vec2);
                 vec4 shade(vec4);
+                
                 void main() {
                     vec3 cam_pos = vec3(0.0, 0.0, -5.0);
                     vec2 window_size = vec2(width,height);
@@ -52,16 +54,27 @@ class RayMarchingWindow(BasicWindow):
                     f_color = back_color;
                     vec4 color = vec4(0,0,0,0);
                     
-                    for(int j = 0; j < 4; j++) {
-                        // Make 4 rays offset uniform amount from center
-                       vec2 sub_pixel = gl_FragCoord.xy + vec2( (j % 2) * 2.0 - 1.0, (j / 2) * 2.0 - 1.0 ) * 0.5;
+                    // From page 310 of Shirley and Marschner
+                    int sample_frequency = 2; // 3x3
+                    for(int p = 0; p < sample_frequency; p++) {  
+                        for(int q = 0; q < sample_frequency; q++) {  
+                        // Make rays offset uniform amounts from center
+                        
+                        
+                        //vec2 sub_region = vec2( (j % 2) * 2.0 - 1.0, (j / 2) * 2.0 - 1.0 ) * 0.5;
+                       // float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
+                        //vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/2;
+                        
+                        vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
+                        vec2 sub_pixel = gl_FragCoord.xy + sub_region;  // + vec2(random_shift)/2;
+                        
                         vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height, -cam_pos.z)), 1.0);
                         for(int i = 0; i < 32; i++) {
                             // Loop over objects
                             signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.xyz ) - (sphere.w ) ;
                             if(signed_dist < 0.001 ){
                             
-                               vec3 amb_color = back_color.rgb /100 * sphere_color.rgb;
+                                //vec3 amb_color = back_color.rgb /100 * sphere_color.rgb;
                                 
                                 // TODO: Make shade() function, fix current math...
                                 vec3 pos_on_sphere = cam_pos + ray.xyz * ray.w;
@@ -69,7 +82,7 @@ class RayMarchingWindow(BasicWindow):
                                 vec3 vec_to_light = normalize(light.xyz - pos_on_sphere);
                                 float lambertian = dot(vec_to_light, norm);
                                 
-                                vec3 diffuse_color = clamp(light.rgb * max(lambertian,0.0) * sphere_color.rgb, vec3(0,0,0), vec3(1,1,1));
+                                vec3 diffuse_color = light.rgb * max(lambertian,0.0) * sphere_color.rgb;
                                 
                                 f_color = vec4(diffuse_color, 1.0);
                                 
@@ -78,24 +91,30 @@ class RayMarchingWindow(BasicWindow):
                                 vec3 reflected_vec = 2.0 * dot(vec_to_light, norm) * norm - vec_to_light;
                                 vec3 e_vec = -1.0 * ray.xyz;  // negative so facing correct way
                                 float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
-                                vec3 specular_color = light.w * light.rgb * pow(e_dot_r, 16.0);
+                                vec3 specular_color = light.w * light.rgb * pow(e_dot_r, 8.0);
     
-                                color = color + clamp(vec4(amb_color + diffuse_color + specular_color, 0.0), vec4(0.0), vec4(1.0));
+                                color = color + vec4( diffuse_color + specular_color, 1.0);
+                                //f_color = vec4( diffuse_color + specular_color, 1.0);
                                 
-                               break;
+                                break;
                             } else if ( i >= 31 ){
-                                color = color + back_color;
+                                //f_color = back_color;
+                               // break;
+                               color = color + back_color;
                             } else {
                                 ray.w = ray.w + signed_dist;
                             }
                         }
-                   }
-                   f_color = color / 4.0 ;
-                   vec4 temp = sphere_color;
+                   }}
+                   f_color = clamp(color / pow(sample_frequency, 2.0), vec4(0.0), vec4(1.0));;
                     
 
                 }
                 
+                // from https://stackoverflow.com/questions/4200224/random-noise-functions-for-glsl
+                float rand(vec2 co){
+                    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+                }
                 
             ''',
         )
@@ -104,7 +123,7 @@ class RayMarchingWindow(BasicWindow):
         #self.prog['time'].value = 0
         self.prog['sphere'].value = (0.0, 0.0, 15.0, 1.0)
         self.prog['sphere_color'].value = (0.5, 0.2, 0.7, 1.0)
-        self.prog['back_color'].value = (0.8, 0.5, 0.3,  1.0)
+        self.prog['back_color'].value = (1, 1, 1, 1.0)
         self.prog['light'].value = (3, 3, 10, 1)
 
 
@@ -128,7 +147,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         self.vao.render()
-        self.prog['sphere'].value = (np.cos(time)/2.0, np.sin(time)/2.0, 15.0 + np.sin(time*2)*3, 1.0)
+        self.prog['light'].value = (3 + np.cos(time*3), 3 + np.sin(time*3), 10.0 , 1.0) #+ np.sin(time * 2) * 3
 
 
 if __name__ == '__main__':
