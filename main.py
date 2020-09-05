@@ -11,6 +11,7 @@ import numpy as np
 
 from window_setup import BasicWindow
 
+
 class RayMarchingWindow(BasicWindow):
     gl_version = (3, 3)
     title = "Hello World"
@@ -30,12 +31,12 @@ class RayMarchingWindow(BasicWindow):
                     
                 }
             ''',
-            fragment_shader=open("raymarch.frag","r").read(),
+            fragment_shader=open("raymarch.frag", "r").read(),
 
         )
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
-        #self.prog['time'].value = 0
+        # self.prog['time'].value = 0
         self.prog['sphere'].value = (0.0, 0.0, 15.0, 0.5)
         self.prog['sphere_color'].value = (1.0, 0.0, 0.0, 1.0)
         self.prog['back_color'].value = (1, 1, 1, 1.0)
@@ -63,7 +64,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         self.vao.render()
-        self.prog['sphere'].value = (np.cos(time), np.sin(time*1.5), 15.0 + np.sin(time/1.5) * 7, 0.5) #
+        self.prog['sphere'].value = (np.cos(time), np.sin(time*1.5), 15.0 + np.sin(time/1.5) * 7, 0.5)  #
 
 
 if __name__ == '__main__':
