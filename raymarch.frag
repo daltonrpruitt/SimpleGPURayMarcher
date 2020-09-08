@@ -9,8 +9,9 @@ struct Sphere {
 };
 
 //Plane information
-vec3 plane_norm = normalize(vec3(0., 1., -0.5));
+vec3 plane_norm = normalize(vec3(0., 0., -1.));
 float plane_dist = -20.0;
+vec3 plane_color = vec3(0.5);
 
 uniform float width;
 uniform float height;
@@ -50,24 +51,41 @@ void main() {
             vec4 ray = vec4(normalize(vec3((gl_FragCoord.xy - window_size/2.0)/height, -cam_pos.z)), 1.0);
             for(int i = 0; i < 32; i++) {
                 // TODO: Loop over objects
-                signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.xyz ) - (sphere.w ) ;
+                float sphere_signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.xyz ) - (sphere.w ) ;
+                
+                float plane_signed_dist = 1.0e6;
+                if(dot(ray.xyz, plane_norm) < 0){
+                    plane_signed_dist = (plane_dist - dot(cam_pos, plane_norm))/dot(ray.xyz, plane_norm);
+                }
+
+                bool sphere_closer;
+                if(sphere_signed_dist < plane_signed_dist){
+                    signed_dist = sphere_signed_dist;
+                    sphere_closer = true;
+                } else {
+                    signed_dist = plane_signed_dist;
+                    sphere_closer = false;
+
+                }
+
                 if(signed_dist < 0.0001 ){
                 
+                    if(sphere_closer) {
                     vec3 amb_color = ambient_coeff * sphere_color.rgb;
                     
                     // TODO: Make shade() function, fix current math...
-                    vec3 pos_on_sphere = cam_pos + ray.xyz * ray.w;
-                    vec3 norm = normalize(pos_on_sphere - sphere.xyz);
-                    vec3 vec_to_light = normalize(light.xyz - pos_on_sphere);
-                    float lambertian = clamp(dot(vec_to_light, norm), 0.0, 1.0);
+                    vec3 hit_pos = cam_pos + ray.xyz * ray.w;
+                    vec3 hit_norm = normalize(hit_pos - sphere.xyz);
+                    vec3 vec_to_light = normalize(light.xyz - hit_pos);
+                    float lambertian = clamp(dot(vec_to_light, hit_norm), 0.0, 1.0);
                     
                     vec3 diffuse_color = light_color.rgb * lambertian * sphere_color.rgb;
                     
-                    f_color = vec4(diffuse_color, 1.0);
+                    //f_color = vec4(diffuse_color, 1.0);
                     
                     // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
                     // Check if is actually reflecting the correct way
-                    vec3 reflected_vec = reflect(-vec_to_light, norm);
+                    vec3 reflected_vec = reflect(-vec_to_light, hit_norm);
                     //Above is effectively normalize(2.0 * dot(vec_to_light, norm) * norm - vec_to_light);
                     vec3 e_vec = normalize(-1.0 * ray.xyz);  // negative so facing correct way
                     float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
@@ -75,8 +93,33 @@ void main() {
 
                     //color = color + vec4( amb_color + diffuse_color + specular_color, 1.0);
                     f_color = vec4( diffuse_color + specular_color, 1.0);
+
+                    } else {
+                        // Plane hit
+                        vec3 amb_color = ambient_coeff * plane_color;
                     
+                        // TODO: Make shade() function, fix current math...
+                        vec3 hit_pos = cam_pos + ray.xyz * ray.w;
+                        vec3 hit_norm = plane_norm;
+                        vec3 vec_to_light = normalize(light.xyz - hit_pos);
+                        float lambertian = clamp(dot(vec_to_light, hit_norm), 0.0, 1.0);
+                        
+                        vec3 diffuse_color = light_color.rgb * lambertian * plane_color;
+                                                
+                        // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
+                        // Check if is actually reflecting the correct way
+                        vec3 reflected_vec = reflect(-vec_to_light, hit_norm);
+                        //Above is effectively normalize(2.0 * dot(vec_to_light, norm) * norm - vec_to_light);
+                        vec3 e_vec = normalize(-1.0 * ray.xyz);  // negative so facing correct way
+                        float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
+                        vec3 specular_color = light.w * light_color * pow(e_dot_r, 16.0);
+
+                        //color = color + vec4( amb_color + diffuse_color + specular_color, 1.0);
+                        f_color = vec4( diffuse_color + specular_color, 1.0);
+
+                    }
                     break;
+        
                 } else if ( i >= 31 ){
                     //f_color = back_color;
                     // break;
