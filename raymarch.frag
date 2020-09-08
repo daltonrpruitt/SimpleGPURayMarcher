@@ -25,18 +25,16 @@ void main() {
     
     // From page 310 of Shirley and Marschner
     int sample_frequency = 2; // 3x3
-    for(int p = 0; p < sample_frequency; p++) {  
-        for(int q = 0; q < sample_frequency; q++) {  
+    //for(int p = 0; p < sample_frequency; p++) {  
+        //for(int q = 0; q < sample_frequency; q++) {  
         
             // Make rays offset uniform amounts from center
-            //vec2 sub_region = vec2( (j % 2) * 2.0 - 1.0, (j / 2) * 2.0 - 1.0 ) * 0.5;
-            //vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/2;
             
-            vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
-            float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
-            vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
+            //vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
+            //float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
+            //vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
             
-            vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height, -cam_pos.z)), 1.0);
+            vec4 ray = vec4(normalize(vec3((gl_FragCoord.xy - window_size/2.0)/height, -cam_pos.z)), 1.0);
             for(int i = 0; i < 32; i++) {
                 // TODO: Loop over objects
                 signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.xyz ) - (sphere.w ) ;
@@ -62,8 +60,8 @@ void main() {
                     float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
                     vec3 specular_color = light.w * light_color * pow(e_dot_r, 16.0);
 
-                    color = color + vec4( amb_color + diffuse_color + specular_color, 1.0);
-                    //f_color = vec4( diffuse_color + specular_color, 1.0);
+                    //color = color + vec4( amb_color + diffuse_color + specular_color, 1.0);
+                    f_color = vec4( diffuse_color + specular_color, 1.0);
                     
                     break;
                 } else if ( i >= 31 ){
@@ -74,12 +72,23 @@ void main() {
                     ray.w = ray.w + signed_dist;
                 }
             }
-        }
-    }
-    f_color = clamp(color / pow(sample_frequency, 2.0), vec4(0.0), vec4(1.0));;
+       // }
+    //}
+
+    //f_color = clamp(color / pow(sample_frequency, 2.0), vec4(0.0), vec4(1.0));;
     
 
 }
+
+// Based on general structure of Dr. TJ Jankun-Kelly's Observable Notes: https://observablehq.com/@infowantstobeseen/basic-ray-marching
+vec3 shade(/*some object struct*/vec4 object, vec3 point, vec3 to_eye) {
+    
+
+
+    
+    return vec3(-1., -1., -1.);
+}
+
 
 // from https://stackoverflow.com/questions/4200224/random-noise-functions-for-glsl
 float rand(vec2 co){
