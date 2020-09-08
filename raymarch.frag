@@ -55,7 +55,7 @@ void main() {
                 
                 float plane_signed_dist = 1.0e6;
                 if(dot(ray.xyz, plane_norm) < 0){
-                    plane_signed_dist = (plane_dist - dot(cam_pos, plane_norm))/dot(ray.xyz, plane_norm);
+                    plane_signed_dist = dot(cam_pos + ray.xyz * ray.w, plane_norm) - plane_dist; //(plane_dist - dot(cam_pos, plane_norm))/dot(ray.xyz, plane_norm);
                 }
 
                 bool sphere_closer;
