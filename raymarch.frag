@@ -1,4 +1,17 @@
 #version 330
+
+struct Sphere {
+
+    vec3 center;
+    vec3 color;
+    float radius;
+
+};
+
+//Plane information
+vec3 plane_norm = normalize(vec3(0., 1., -0.5));
+float plane_dist = -20.0;
+
 uniform float width;
 uniform float height;
 // uniform float time;
