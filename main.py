@@ -8,6 +8,8 @@ import moderngl_window
 '''
 
 import numpy as np
+#import input_commands 
+
 
 from window_setup import BasicWindow
 
@@ -64,7 +66,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         self.vao.render()
-        self.prog['sphere'].value = (0, 0, 10.0 + np.sin(time/2) * 5, 0.5)  #np.cos(time), np.sin(time*1.5)
+        self.prog['sphere'].value = (0, 0, 10.0, 0.5)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
 
 
 if __name__ == '__main__':

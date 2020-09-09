@@ -1,17 +1,24 @@
 #version 330
 
 struct Sphere {
-
     vec3 center;
     vec3 color;
     float radius;
-
 };
 
+
+struct Plane {
+    vec3 normal;
+    float distance;
+    vec3 color;
+};
+ 
 //Plane information
-vec3 plane_norm = normalize(vec3(0., 0, -1));
-float plane_dist = 6.0;
+vec3 plane_norm = normalize(vec3(0., 1, -0.1));
+float plane_dist = 1;
 vec3 plane_color = vec3(0.949, 0.9882, 0.3882);
+
+Plane plane = Plane(plane_norm, plane_dist, plane_color);
 
 uniform float width;
 uniform float height;
@@ -24,23 +31,31 @@ uniform vec3 light_color;
 
 out vec4 f_color;
 
+
+
+vec3 cam_pos = vec3(0.0, 2.0, -5.0);
+float ambient_coeff = 0.4;
+float maxDistance = 1.0e8;
+
+
 float rand(vec2);
 vec3 shade(vec4, vec3, vec3, vec3 );
-
-
-vec3 cam_pos = vec3(0.0, 0.0, -5.0);
-float ambient_coeff = 0.4;
+float sdfPlane(Plane, vec4 );
 
 void main() {
+
+
+
+
     vec2 window_size = vec2(width,height);
     //f_color = ray;
     
-    float signed_dist = 1.0e6;
+    float signed_dist = maxDistance;
     f_color = back_color;
     vec4 color = vec4(0,0,0,0);
     
     // From page 310 of Shirley and Marschner
-    int sample_frequency = 2; // 3x3
+    int sample_frequency = 2; // 
     //for(int p = 0; p < sample_frequency; p++) {  
         //for(int q = 0; q < sample_frequency; q++) {  
         
@@ -50,21 +65,13 @@ void main() {
             //float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
             //vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
             
-            vec4 ray = vec4(normalize(vec3((gl_FragCoord.xy - window_size/2.0)/height, -cam_pos.z)), 1.0);
-            int march_iterations = 128;
-            for(int i = 0; i < 64; i++) {
+            vec4 ray = vec4(normalize(vec3((gl_FragCoord.xy - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 1.0);
+            int march_iterations = 256;
+            for(int i = 0; i < march_iterations; i++) {
                 // TODO: Loop over objects
                 float sphere_signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.xyz ) - (sphere.w ) ;
                 
-                float plane_signed_dist = 1.0e6;
-                if(dot(ray.xyz , plane_norm) < 0){
-                   // plane facing camera
-                    vec3 p_plane = plane_norm * -plane_dist;
-
-                    plane_signed_dist = dot(cam_pos + ray.xyz * ray.w - p_plane, plane_norm) + plane_dist; //(plane_dist - dot(cam_pos, plane_norm))/dot(ray.xyz, plane_norm);
-                    //f_color = vec4((-dot(ray.xyz , plane_norm)-0.1)*2.0);return;   //Debug
-                    //f_color = vec4((dot(ray.xyz , plane_norm)-0.1)*2.0);return;   //Debug
-                }
+                float plane_signed_dist = sdfPlane(plane, ray);
 
                 bool sphere_closer;
                 if(sphere_signed_dist <= plane_signed_dist){
@@ -76,13 +83,13 @@ void main() {
                     //f_color = vec4((-dot(ray.xyz , plane_norm)-0.1)*2.0);return;   //Debug
                 }
 
-                if(signed_dist < 0.01 ){
+                if(signed_dist < 0.0001 ){
                 
                     if(sphere_closer) {
                         vec3 p_hit = cam_pos + ray.xyz * ray.w;
                         f_color = vec4(shade(ray, p_hit, normalize(p_hit - sphere.xyz), sphere_color.rgb), 1.0);
                         return;
-
+                        /*
                         vec3 amb_color = ambient_coeff * sphere_color.rgb;
                         
                         // TODO: Make shade() function, fix current math...
@@ -106,6 +113,7 @@ void main() {
                         //color = color + vec4( amb_color + diffuse_color + specular_color, 1.0);
                         f_color = vec4( amb_color + diffuse_color + specular_color, 1.0);
                         return;
+                        */
 
                     } else {
                         vec3 p_hit = cam_pos + ray.xyz * ray.w;
@@ -151,6 +159,27 @@ void main() {
     
 
 }
+
+
+
+float marchRay(vec4 ray) {
+
+    return maxDistance;
+}
+
+float sdfPlane(Plane plane, vec4 ray){
+    
+    if(dot(ray.xyz , plane.normal) < 0){
+        // plane facing camera
+        // https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection
+        vec3 p_plane = plane.normal * -plane.distance;
+        return dot(cam_pos + ray.xyz * ray.w - p_plane, plane.normal) + plane.distance; 
+    } else {
+        return maxDistance;
+    }
+}
+
+
 
 // Based on general structure of Dr. TJ Jankun-Kelly's Observable Notes: https://observablehq.com/@infowantstobeseen/basic-ray-marching
 vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color) {
