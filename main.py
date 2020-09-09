@@ -39,13 +39,17 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
+
         self.prog['sphere.center'].value = (0.0, 0.0, 10.0)
         self.prog['sphere.radius'].value = 0.5
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
+
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0)
-        self.prog['light'].value = (2, 2, 10, 1)
+
+        self.prog['light'].value = (2, 2, 0, 1)
         self.prog['light_color'].value = (1, 1, 1)
-        self.prog['using_dir_light'].value = True
+
+        self.prog['using_dir_light'].value = False
 
         vertices = np.array([
             -1, -1,
