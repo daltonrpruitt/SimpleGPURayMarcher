@@ -14,7 +14,7 @@ from window_setup import BasicWindow
 
 class RayMarchingWindow(BasicWindow):
     gl_version = (3, 3)
-    title = "Hello World"
+    title = "Ray Marching Demo Scene"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -37,9 +37,9 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
-        self.prog['sphere'].value = (0.0, 0.0, 15.0, 0.5)
+        self.prog['sphere'].value = (0.0, 0.0, 10.0, 0.5)
         self.prog['sphere_color'].value = (1.0, 0.0, 0.0, 1.0)
-        self.prog['back_color'].value = (1, 1, 1, 1.0)
+        self.prog['back_color'].value = (0, 0.3, 0.9, 1.0)
         self.prog['light'].value = (2, 2, 10, 1)
         self.prog['light_color'].value = (1, 1, 1)
 
@@ -64,7 +64,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         self.vao.render()
-        self.prog['sphere'].value = (np.cos(time), np.sin(time*1.5), 15.0 + np.sin(time/1.5) * 7, 0.5)  #
+        self.prog['sphere'].value = (0, 0, 10.0 + np.sin(time/2) * 5, 0.5)  #np.cos(time), np.sin(time*1.5)
 
 
 if __name__ == '__main__':
