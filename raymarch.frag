@@ -2,8 +2,8 @@
 
 struct Sphere {
     vec3 center;
-    vec3 color;
     float radius;
+    vec3 color;
 };
 
 
@@ -23,8 +23,8 @@ Plane plane = Plane(plane_norm, plane_dist, plane_color);
 uniform float width;
 uniform float height;
 // uniform float time;
-uniform vec4 sphere;
-uniform vec4 sphere_color;
+uniform Sphere sphere;
+//uniform vec4 sphere_color;
 uniform vec4 back_color;
 uniform vec4 light;
 uniform vec3 light_color;
@@ -43,12 +43,11 @@ vec3 dir_light_color = vec3(0.5, 0.2, 0.9);
 
 float rand(vec2);
 vec3 shade(vec4, vec3, vec3, vec3 );
+float sdfSphere(Sphere, vec4);
 float sdfPlane(Plane, vec4 );
+float marchRay(vec4);
 
 void main() {
-
-
-
 
     vec2 window_size = vec2(width,height);
     //f_color = ray;
@@ -72,7 +71,7 @@ void main() {
             int march_iterations = 256;
             for(int i = 0; i < march_iterations; i++) {
                 // TODO: Loop over objects
-                float sphere_signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.xyz ) - (sphere.w ) ;
+                float sphere_signed_dist = length(ray.xyz * ray.w + cam_pos - sphere.center ) - (sphere.radius ) ;
                 
                 float plane_signed_dist = sdfPlane(plane, ray);
 
@@ -90,7 +89,7 @@ void main() {
                 
                     if(sphere_closer) {
                         vec3 p_hit = cam_pos + ray.xyz * ray.w;
-                        f_color = vec4(shade(ray, p_hit, normalize(p_hit - sphere.xyz), sphere_color.rgb), 1.0);
+                        f_color = vec4(shade(ray, p_hit, normalize(p_hit - sphere.center), sphere.color), 1.0);
                         return;
                         /*
                         vec3 amb_color = ambient_coeff * sphere_color.rgb;
@@ -180,8 +179,9 @@ float sdfPlane(Plane plane, vec4 ray){
         return maxDistance;
     }
 }
-
-
+float sdfSphere(Sphere sph, vec4 ray){
+    return length(ray.xyz * ray.w + cam_pos - sph.center) - sph.radius;
+}
 
 // Based on general structure of Dr. TJ Jankun-Kelly's Observable Notes: https://observablehq.com/@infowantstobeseen/basic-ray-marching
 vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color) {
