@@ -29,7 +29,8 @@ Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_
 uniform vec3 box_center = vec3(-2,  0., 8.);
 vec3 box_dimensions = vec3(1);
 vec3 box_color = vec3(0.9686, 0.9843, 0.0118);
-float box_shininess = 2.0;
+float box_shininess = 32.0;
+//mat4 box_rotation = mat4(1);
 
 
 
@@ -40,6 +41,7 @@ uniform Sphere sphere;
 uniform vec4 back_color;
 uniform vec4 light;
 uniform vec3 light_color;
+bool point_light_shadow = false;
 
 uniform bool using_point_light;
 uniform bool using_dir_light;
@@ -49,12 +51,13 @@ out vec4 f_color;
 
 
 
-int march_iterations = 512;
+int march_iterations = 1024;
 uniform vec3 cam_pos; // = vec3(0.0, 0.0, -10.0);
 float ambient_coeff = 0.4;
 float maxDistance = 1.0e3;
 vec3 dir_light = normalize(vec3(1, -1, 1));
 vec3 dir_light_color = vec3(1);
+bool dir_light_shadow = false;
 
 int numObjects = 3;
 int findMinInArray(float[3]);
@@ -119,6 +122,7 @@ void main() {
                 if (obj_in_way != -1){
                 // In shadow
                     in_shadows = in_shadows + 1;
+                    point_light_shadow = true;
                 }
 
             }
@@ -130,8 +134,9 @@ void main() {
                 int obj_in_way;
                 marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
                 if (obj_in_way != -1){
-                // In shadow
+                    // In shadow
                     in_shadows = in_shadows + 1;
+                    dir_light_shadow = true;
                 }
             }
             if(numLights == 0) { f_color = vec4(0.0); return;}
@@ -254,18 +259,6 @@ void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_d
             signed_dist = distances[obj_idx];
         }
 
-
-        /*
-        //bool sphere_closer;
-        if(sphere_signed_dist <= plane_signed_dist){
-            signed_dist = sphere_signed_dist;
-            object_closer = 0;
-        } else {
-            signed_dist = plane_signed_dist;
-            object_closer = 1;
-            //f_color = vec4((-dot(ray.xyz , plane_norm)-0.1)*2.0);return;   //Debug
-        }*/
-
         if(signed_dist < 0.0001 ){
             object_hit = obj_idx;
             return;
@@ -339,8 +332,9 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         vec3 specular_color =  light_color * pow(e_dot_r, obj_shininess);
-    
-        color = color + (diffuse_color + specular_color) * (1-shadow_fraction);
+        if (!point_light_shadow){
+            color = color + diffuse_color + specular_color; //* (1-shadow_fraction);
+        }
     }
     if(using_dir_light) {
         // TODO: Make shade() function, fix current math...
@@ -357,12 +351,15 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         //return vec3(e_dot_r);
         vec3 specular_color = dir_light_color * pow(e_dot_r, obj_shininess);
-    
-        color = color +  (diffuse_color + specular_color) * (1-shadow_fraction);// 
+        if(!dir_light_shadow){
+            color = color +  diffuse_color + specular_color ;//* (1-shadow_fraction); 
+        }
     }
     return clamp(color , vec3(0.), vec3(1.));
 }
 
+
+// Non-sorted array of floats
 int findMinInArray(float distances[3]){
     int min_idx = 0;
     float minimum = distances[0];
