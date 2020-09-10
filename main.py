@@ -54,7 +54,8 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['cam_pos'].value = (0, 3, -5)
 
-        self.prog['using_dir_light'].value = False
+        self.prog['using_point_light'] = True
+        self.prog['using_dir_light'].value = True
 
         vertices = np.array([
             -1, -1,

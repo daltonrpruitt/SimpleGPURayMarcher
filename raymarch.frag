@@ -40,6 +40,8 @@ uniform Sphere sphere;
 uniform vec4 back_color;
 uniform vec4 light;
 uniform vec3 light_color;
+
+uniform bool using_point_light;
 uniform bool using_dir_light;
 
 
@@ -47,18 +49,18 @@ out vec4 f_color;
 
 
 
-int march_iterations = 2048;
+int march_iterations = 512;
 uniform vec3 cam_pos; // = vec3(0.0, 0.0, -10.0);
 float ambient_coeff = 0.4;
 float maxDistance = 1.0e3;
-vec3 dir_light = vec3(1, -1, 1);
-vec3 dir_light_color = vec3(0.5, 0.2, 0.9);
+vec3 dir_light = normalize(vec3(1, -1, 1));
+vec3 dir_light_color = vec3(1);
 
 int numObjects = 3;
 int findMinInArray(float[3]);
 
 float rand(vec2);
-vec3 shade(vec4, vec3, vec3, vec3, float);
+vec3 shade(vec4, vec3, vec3, vec3, float, float);
 float sdfSphere(Sphere, vec4, vec3);
 float sdfPlane(Plane, vec4, vec3);
 float sdfBox(vec3, vec3, vec4, vec3);
@@ -103,29 +105,42 @@ void main() {
             vec3 obj_normal = getNormal(p_hit, object_hit);
             //f_color = vec4(obj_normal*vec3(2, 2, 3), 1); 
             vec3 to_light;
-            float max_dist = maxDistance; 
-            if(!using_dir_light){
+            float max_dist; 
+
+            float numLights = 0;
+            float in_shadows = 0;
+            if(using_point_light){
+                numLights = numLights + 1;
                 to_light = normalize(light.xyz - p_hit);
                 max_dist = length(light.xyz - p_hit);
-            } else {
-                to_light = -1.0 * dir_light;
-            }
-            vec4 shadow_ray = vec4(to_light, 0.001);
-            //f_color = vec4(shadow_ray.r*2, shadow_ray.g * 2, shadow_ray.b*2, 1.0); 
-            //return;
-            int obj_in_way;
-            marchRay(obj_in_way, shadow_ray, p_hit + 0.1*obj_normal, max_dist);
-            //f_color = vec4(vec3((1.0 + obj_in_way) / 2.0), 1.0);
-            //f_color = vec4(sphere.color, 1.0);
-            
-            if (obj_in_way != -1){
+                vec4 shadow_ray = vec4(to_light, 0.001);
+                int obj_in_way;
+                marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+                if (obj_in_way != -1){
                 // In shadow
-                f_color = vec4(0.0, 0.0, 0.0, 0.0); 
-                return;
+                    in_shadows = in_shadows + 1;
+                }
+
             }
+            if (using_dir_light) {
+                numLights = numLights + 1;
+                to_light = -1.0 * dir_light;
+                max_dist = maxDistance;
+                vec4 shadow_ray = vec4(to_light, 0.001);
+                int obj_in_way;
+                marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+                if (obj_in_way != -1){
+                // In shadow
+                    in_shadows = in_shadows + 1;
+                }
+            }
+            if(numLights == 0) { f_color = vec4(0.0); return;}
+            float shadow_fraction = in_shadows/numLights;
+            
+
             if (object_hit == 0) {
                 // Sphere
-                f_color = vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess), 1.0);
+                f_color = vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess, shadow_fraction), 1.0);
                return;
             } else if (object_hit == 1){
                 // Plane
@@ -135,12 +150,12 @@ void main() {
                     reflection_color = reflectedRayMarchColor(r, p_hit + r.w*r.xyz);
                 }
                 f_color = plane.reflectiveness * reflection_color + 
-                        (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess), 1.0);
+                        (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess, shadow_fraction), 1.0);
                 return;
             } else if (object_hit == 2){
                 // Box
                 //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-                f_color = vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess), 1.0);
+                f_color = vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess, shadow_fraction), 1.0);
                 return;
             } else { 
                 // Error
@@ -168,34 +183,49 @@ vec4 reflectedRayMarchColor(vec4 reflected_ray, vec3 reflection_origin){
     //f_color = vec4(obj_normal*vec3(2, 2, 3), 1); 
     vec3 to_light;
     float max_dist = maxDistance; 
-    if(!using_dir_light){
+    float numLights = 0;
+    float in_shadows = 0;
+    if(using_point_light){
+        numLights = numLights + 1;
         to_light = normalize(light.xyz - p_hit);
         max_dist = length(light.xyz - p_hit);
-    } else {
-        to_light = -1.0 * dir_light;
-    }
-    vec4 shadow_ray = vec4(to_light, 0.001);
-    //f_color = vec4(shadow_ray.r*2, shadow_ray.g * 2, shadow_ray.b*2, 1.0); 
-    //return;
-    int obj_in_way;
-    marchRay(obj_in_way, shadow_ray, p_hit + 0.1*obj_normal, max_dist);
-    //f_color = vec4(vec3((1.0 + obj_in_way) / 2.0), 1.0);
-    //f_color = vec4(sphere.color, 1.0);
-
-    if (obj_in_way != -1){
+        vec4 shadow_ray = vec4(to_light, 0.001);
+        int obj_in_way;
+        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+        if (obj_in_way != -1){
         // In shadow
-        return vec4(0.0, 0.0, 0.0, 0.0); 
+            in_shadows = in_shadows + 1;
+        }
+
+    }
+    if (using_dir_light) {
+        numLights = numLights + 1;
+        to_light = -1.0 * dir_light;
+        max_dist = maxDistance;
+        vec4 shadow_ray = vec4(to_light, 0.001);
+        int obj_in_way;
+        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+        if (obj_in_way != -1){
+        // In shadow
+            in_shadows = in_shadows + 1;
+        }
+    }
+
+    float reflected_shadow_fraction = in_shadows/numLights;
+
+    if(in_shadows > 0.99) {
+        return vec4(0);
     }
     if (object_hit == 0) {
         // Sphere
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, sphere.color, sphere.shininess), 1.0);
+        return vec4(shade(reflected_ray, reflection_origin, obj_normal, sphere.color, sphere.shininess, reflected_shadow_fraction), 1.0);
     } else if (object_hit == 1){
         // Plane
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, plane.color, plane.shininess), 1.0);
+        return vec4(shade(reflected_ray, reflection_origin, obj_normal, plane.color, plane.shininess, reflected_shadow_fraction), 1.0);
     } else if (object_hit == 2){
         // Box
         //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, box_color, box_shininess), 1.0);
+        return vec4(shade(reflected_ray, reflection_origin, obj_normal, box_color, box_shininess, reflected_shadow_fraction), 1.0);
     } else { 
         // Error
         return vec4(0.9333, 0.0157, 0.0157, 1.0);
@@ -291,10 +321,10 @@ float sdfBox(vec3 dimensions, vec3 center, vec4 ray, vec3 ray_start) {
 
 
 // Based on general structure of Dr. TJ Jankun-Kelly's Observable Notes: https://observablehq.com/@infowantstobeseen/basic-ray-marching
-vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, float obj_shininess) {
-    vec3 amb_color = ambient_coeff * object_color;
-    
-    if(!using_dir_light){
+vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, float obj_shininess, float shadow_fraction) {
+    vec3 color = ambient_coeff * object_color;
+
+    if(using_point_light){
 
         // TODO: Make shade() function, fix current math...
         vec3 vec_to_light = normalize(light.xyz - hit_point);
@@ -310,8 +340,9 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         vec3 specular_color =  light_color * pow(e_dot_r, obj_shininess);
     
-        return vec3(amb_color + diffuse_color + specular_color);
-    } else {
+        color = color + (diffuse_color + specular_color) * (1-shadow_fraction);
+    }
+    if(using_dir_light) {
         // TODO: Make shade() function, fix current math...
         vec3 vec_to_light = -dir_light;
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
@@ -325,10 +356,11 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         //return vec3(e_dot_r);
-        vec3 specular_color = 0.00001 * dir_light_color * pow(e_dot_r, obj_shininess);
+        vec3 specular_color = dir_light_color * pow(e_dot_r, obj_shininess);
     
-        return vec3(amb_color + diffuse_color + specular_color);// 
+        color = color +  (diffuse_color + specular_color) * (1-shadow_fraction);// 
     }
+    return clamp(color , vec3(0.), vec3(1.));
 }
 
 int findMinInArray(float distances[3]){
