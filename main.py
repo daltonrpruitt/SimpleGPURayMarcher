@@ -43,11 +43,12 @@ class RayMarchingWindow(BasicWindow):
         self.prog['sphere.center'].value = (0.0, 0.0, 10.0)
         self.prog['sphere.radius'].value = 0.5
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
+        self.prog['sphere.shininess'].value = 32.0
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0)
 
-        self.prog['light'].value = (2, 2, 0, 1)
-        self.prog['light_color'].value = (1, 1, 1)
+        self.prog['light'].value = (5., 5., 0., 1.)
+        self.prog['light_color'].value = (1., 1., 1.)
 
         self.prog['using_dir_light'].value = False
 
