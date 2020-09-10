@@ -40,15 +40,19 @@ class RayMarchingWindow(BasicWindow):
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
 
-        self.prog['sphere.center'].value = (0.0, 0.0, 10.0)
-        self.prog['sphere.radius'].value = 0.5
+        self.prog['sphere.center'].value = (0.0, 1.0, 8.0)
+        self.prog['sphere.radius'].value = 1.0
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
 
+        self.prog['box_center'].value = (-1, 0, 8)
+
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0)
 
-        self.prog['light'].value = (5., 5., 0., 1.)
+        self.prog['light'].value = (2., 2., 5., 1.)
         self.prog['light_color'].value = (1., 1., 1.)
+
+        self.prog['cam_pos'].value = (0, 3, -5)
 
         self.prog['using_dir_light'].value = False
 
@@ -72,7 +76,9 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         self.vao.render()
-        self.prog['sphere.center'].value = (0, 0, 10.0 + np.sin(time/2) * 5)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+        self.prog['sphere.center'].value = ( np.cos(time/2)*2, 0, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+        self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2-np.pi ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+        #self.prog['cam_pos'].value = (0, 1+ np.sin(time/4)*0.5, -5)
 
 
 if __name__ == '__main__':
