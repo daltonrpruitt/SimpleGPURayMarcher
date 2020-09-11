@@ -30,7 +30,7 @@ uniform vec3 box_center = vec3(-2,  0., 8.);
 vec3 box_dimensions = vec3(1);
 vec3 box_color = vec3(0.9686, 0.9843, 0.0118);
 float box_shininess = 32.0;
-//mat4 box_rotation = mat4(1);
+uniform vec3 box_rotation;
 
 
 
@@ -50,10 +50,9 @@ uniform bool using_dir_light;
 out vec4 f_color;
 
 
-
 int march_iterations = 1024;
 uniform vec3 cam_pos; // = vec3(0.0, 0.0, -10.0);
-float ambient_coeff = 0.4;
+float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
 vec3 dir_light = normalize(vec3(1, -1, 1));
 vec3 dir_light_color = vec3(1);
@@ -71,7 +70,11 @@ float sdfBox(vec3, vec3, vec4, vec3);
 void marchRay(out int, inout vec4, in vec3, float);
 vec4 reflectedRayMarchColor(vec4, vec3 );
 vec3 getNormal(vec3, int);
-//void marchShadow(out int, in vec4 );
+
+mat4 rotationX(in float);
+mat4 rotationY(in float);
+mat4 rotationZ(in float);
+mat4 translateFromVec3(in vec3);
 
 void main() {
 
@@ -282,9 +285,27 @@ vec3 getNormal(vec3 p, int object_hit){
         // PLane
         return plane.normal;
     } else if (object_hit == 2) {
-        // Box
-        vec3 q = p - box_center - box_dimensions; // change to not global...
-        return normalize(max(q,0.0) + min(max(q.x,max(q.y,q.z)),0.0));
+        // Box - based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
+        //vec3 q = (vec4(p, 1.0)*translateFromVec3(-1.*box_center)*rotationY(box_rotation.y)).xyz - box_dimensions; // change to not global...
+        mat4 rotationMat = rotationY(box_rotation.y);
+        vec3 q = (vec4(p, 1.0)*translateFromVec3(-1.*box_center)*rotationMat).xyz;
+        if ( abs(abs(q.x) - box_dimensions.x) <= 0.0001) {
+            vec3 pos_x_norm = (vec4(1, 0, 0, 0)*transpose(rotationMat)).xyz;
+            if (q.x > 0) {return pos_x_norm;}
+            else  {return -1.*pos_x_norm;}
+        }
+        else if ( abs(abs(q.y) - box_dimensions.y) <= 0.0001) {
+            vec3 pos_y_norm = (vec4(0, 1, 0, 0)*transpose(rotationMat)).xyz;
+            if (q.y > 0) {return pos_y_norm;}
+            else  {return -1.*pos_y_norm;}
+        }
+        else {
+            vec3 pos_z_norm = (vec4(0, 0, 1, 0)*transpose(rotationMat)).xyz;
+            if (q.z > 0) {return pos_z_norm;}
+            else  {return -1.*pos_z_norm;}
+        }
+
+        //return normalize((vec4(max(q,0.0) + min(max(q.x,max(q.y,q.z)),0.0), 1.0)*rotationY(-box_rotation.y)).xyz);
         } else {
         // Error
         return vec3(0.);
@@ -306,9 +327,10 @@ float sdfSphere(Sphere sph, vec4 ray, vec3 ray_start){
     return length(ray.xyz * ray.w + ray_start - sph.center) - sph.radius;
 }
 
+// Based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
 float sdfBox(vec3 dimensions, vec3 center, vec4 ray, vec3 ray_start) {
     // translate box
-  vec3 q = abs(ray_start - box_center + ray.xyz * ray.w) - dimensions;
+  vec3 q = abs(vec4(ray_start + ray.xyz * ray.w, 1.0)*translateFromVec3(-1.*box_center)*rotationY(box_rotation.y)).xyz - dimensions;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
 
@@ -375,4 +397,35 @@ int findMinInArray(float distances[3]){
 // from https://stackoverflow.com/questions/4200224/random-noise-functions-for-glsl
 float rand(vec2 co){
     return fract(sin(dot(co.xy, vec2(12.9898,78.233))) * 43758.5453);
+}
+
+// #################################################################
+// https://gist.github.com/onedayitwillmake/3288507
+mat4 rotationX( in float angle ) {
+	return mat4(	1.0,		0,			0,			0,
+			 		0, 	cos(angle),	-sin(angle),		0,
+					0, 	sin(angle),	 cos(angle),		0,
+					0, 			0,			  0, 		1);
+}
+
+mat4 rotationY( in float angle ) {
+	return mat4(	cos(angle),		0,		sin(angle),	0,
+			 				0,		1.0,			 0,	0,
+					-sin(angle),	0,		cos(angle),	0,
+							0, 		0,				0,	1);
+}
+
+mat4 rotationZ( in float angle ) {
+	return mat4(	cos(angle),		-sin(angle),	0,	0,
+			 		sin(angle),		cos(angle),		0,	0,
+							0,				0,		1,	0,
+							0,				0,		0,	1);
+}
+// #################################################################
+
+mat4 translateFromVec3(in vec3 offset) {
+    	return mat4(1,	0,	0,	offset.x,
+			 		0,	1,	0,	offset.y,
+					0,	0,	1,	offset.z,
+					0,	0,	0,	    1);
 }
