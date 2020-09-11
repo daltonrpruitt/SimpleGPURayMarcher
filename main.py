@@ -1,17 +1,19 @@
-import moderngl
-import moderngl_window
-
 '''
     Dalton Winans-Pruitt  dp987
     Based on Hello World example from https://github.com/moderngl/moderngl/tree/master/examples
     Initial Setup for Ray Marcher
 '''
 
+import moderngl
+import moderngl_window
 import numpy as np
+from window_setup import BasicWindow
+
+#Experimenting with inputs
 #import input_commands 
 
 
-from window_setup import BasicWindow
+
 
 
 class RayMarchingWindow(BasicWindow):
@@ -53,7 +55,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['light'].value = (2., 2., 5., 1.)
         self.prog['light_color'].value = (1., 1., 1.)
 
-        self.prog['cam_pos'].value = (0, 2, -5)
+        self.prog['cam_pos'].value = (0, 0, -5)
 
         self.prog['using_point_light'] = True
         self.prog['using_dir_light'].value = True
@@ -78,7 +80,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         self.vao.render()
-        self.prog['sphere.center'].value = ( np.cos(time/2)*2, 0, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+        self.prog['sphere.center'].value = ( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
         self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2-np.pi ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
         self.prog['box_rotation'].value = (0, -time, 0)  #
         #self.prog['cam_pos'].value = (0, 1+ np.sin(time)*0.7, -5)
