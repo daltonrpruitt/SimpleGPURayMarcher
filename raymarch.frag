@@ -122,7 +122,7 @@ void main() {
             if(using_point_light){
                 numLights = numLights + 1;
                 to_light = normalize(light.xyz - p_hit);
-                max_dist = length(light.xyz - p_hit);
+                max_dist = length(light.xyz - p_hit)+1;
                 vec4 shadow_ray = vec4(to_light, 0.001);
                 int obj_in_way;
                 marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
@@ -298,6 +298,7 @@ vec3 getNormal(vec3 p, int object_hit){
         return plane.normal;
     } else if (object_hit == 2) {
         // Box - based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
+        // Change to evaluating the gradient of the sdf at 6 offset positions
         //vec3 q = (vec4(p, 1.0)*translateFromVec3(-1.*box_center)*rotationY(box_rotation.y)).xyz - box_dimensions; // change to not global...
         mat4 rotationMat = rotationY(box_rotation.y);
         vec3 q = (vec4(p, 1.0)*translateFromVec3(-1.*box_center)*rotationMat).xyz;
