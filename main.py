@@ -4,10 +4,10 @@
     Initial Setup for Ray Marcher
 '''
 
-import moderngl
-import moderngl_window
+#import moderngl
+#import moderngl_window
 import numpy as np
-from window_setup import BasicWindow
+from window_setup import BasicWindow  # imports moderngl_window
 
 #Experimenting with inputs
 #import input_commands 
@@ -17,7 +17,7 @@ from window_setup import BasicWindow
 
 
 class RayMarchingWindow(BasicWindow):
-    gl_version = (3, 3)
+    gl_version = (4, 3)
     title = "Ray Marching Demo Scene"
 
     def __init__(self, **kwargs):
@@ -25,7 +25,7 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog = self.ctx.program(
             vertex_shader='''
-                #version 330
+                #version 430
                 in vec2 in_vert;
                 //uniform float width, height;
                 //uniform vec4 sphere;
@@ -59,7 +59,7 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['using_point_light'] = True
         self.prog['using_dir_light'].value = True
-
+        
         vertices = np.array([
             -1, -1,
             1, -1,
@@ -69,9 +69,13 @@ class RayMarchingWindow(BasicWindow):
             1, 1
 
         ], dtype='f4')
+        ''' # Construct VBO for SDF Voxel Sampler
+        crate_voxel_sdf = [1,1,1,1,1,1,1] #...
+        self.obj1_sdf_vbo = self.ctx.buffer()
 
+        '''
         self.vbo = self.ctx.buffer(vertices)
-        self.vao = self.ctx.simple_vertex_array(self.prog, self.vbo, 'in_vert')
+        self.vao = self.ctx.vertex_array(self.prog, self.vbo, 'in_vert')
 
     def render(self, time, frame_time):
         bc = self.prog['back_color'].value

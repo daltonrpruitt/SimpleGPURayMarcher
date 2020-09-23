@@ -1,4 +1,4 @@
-#version 330
+#version 430
 
 struct Sphere {
     vec3 center;
@@ -25,7 +25,7 @@ float plane_reflectiveness = 0.3;
 
 Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_reflectiveness);
 
-// Box
+// Box Info
 uniform vec3 box_center = vec3(-2,  0., 8.);
 vec3 box_dimensions = vec3(1);
 vec3 box_color = vec3(0.9686, 0.9843, 0.0118);
@@ -57,6 +57,12 @@ float maxDistance = 1.0e3;
 vec3 dir_light = normalize(vec3(1, -1, 1));
 vec3 dir_light_color = vec3(1);
 bool dir_light_shadow = false;
+
+
+// Object Voxel SDF Array : Dim = (resolution + 2)^3    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
+uniform float object1_voxel_sdf[18][18][18];
+uniform float object1_scale;
+
 
 int numObjects = 3;
 int findMinInArray(float[3]);
