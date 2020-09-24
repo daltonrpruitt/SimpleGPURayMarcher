@@ -64,18 +64,52 @@ class RayMarchingWindow(BasicWindow):
             -1, -1,
             1, -1,
             -1, 1,
-            -1, 1,
-            1, -1,
             1, 1
 
         ], dtype='f4')
-        ''' # Construct VBO for SDF Voxel Sampler
-        crate_voxel_sdf = [1,1,1,1,1,1,1] #...
-        self.obj1_sdf_vbo = self.ctx.buffer()
 
-        '''
+        # https://github.com/moderngl/moderngl/blob/master/examples/raymarching.py
+        idx_data = np.array([
+            0, 1, 2,
+            2, 1, 3
+        ])
+        idx_buffer = self.ctx.buffer(idx_data)
+
+        # Construct VBO for SDF Voxel Sampler
+        crate_res = 64
+        try:
+            file_name = "SDFs/crate_voxels_res-"+str(crate_res)
+            crate_voxel_sdf = np.loadtxt(file_name,delimiter=",",dtype="float32")
+        except OSError as e:
+            print("No crate file with resolution=" +str(crate_res))
+            print("Exiting...")       
+            exit()
+        #print(crate_voxel_sdf.shape)
+        # Reshape to 3D
+        crate_voxel_sdf = np.reshape(crate_voxel_sdf, newshape=(crate_res+2, crate_res + 2, crate_res + 2))
+        #print(crate_voxel_sdf.shape)
+        
+        # Remove padding on each of the dimensions (padded with 1's); also have to order to C_continguous for the texture creation below
+        crate_voxel_sdf = crate_voxel_sdf[1:-1, 1:-1, 1:-1].copy(order='C')
+
+        self.crate_sdf_texture = self.ctx.texture3d(size=(crate_res, crate_res, crate_res), components=1, data=crate_voxel_sdf,dtype="f4")
+        self.crate_sdf_buffer = self.ctx.buffer(reserve=np.size(crate_voxel_sdf))
+        self.crate_sdf_texture.read_into(self.crate_sdf_buffer)
+        print(self.crate_sdf_buffer.size)
+
         self.vbo = self.ctx.buffer(vertices)
-        self.vao = self.ctx.vertex_array(self.prog, self.vbo, 'in_vert')
+
+        #self.prog['crate_sdf_buffer'].value = self.crate_sdf_buffer
+
+        self.vao = self.ctx.vertex_array(
+            self.prog, 
+            [
+                (self.vbo, '2f', 'in_vert'),
+                #(self.crate_sdf_buffer, str(crate_res)+"f", 'crate_sdf_texture'),
+            ],
+            idx_buffer
+        )
+
 
     def render(self, time, frame_time):
         bc = self.prog['back_color'].value
@@ -84,6 +118,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         self.vao.render()
+        self.crate_sdf_texture.use()
         self.prog['sphere.center'].value = ( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
         self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2-np.pi ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
         self.prog['box_rotation'].value = (0, -time, 0)  #

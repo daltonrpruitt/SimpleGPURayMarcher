@@ -59,9 +59,9 @@ vec3 dir_light_color = vec3(1);
 bool dir_light_shadow = false;
 
 
-// Object Voxel SDF Array : Dim = (resolution + 2)^3    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
-uniform float object1_voxel_sdf[18][18][18];
-uniform float object1_scale;
+// Object Voxel SDF Array : Dim = (resolution + 2)^2 *(resolution + 2)    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
+uniform  sampler3D crate_sdf_texture;
+uniform float crate_scale;
 
 
 int numObjects = 3;
@@ -170,6 +170,8 @@ void main() {
                 }
                 f_color = plane.reflectiveness * reflection_color + 
                         (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
+                // should change something around here to get into the sampler3D
+                f_color = vec4(abs(texture(crate_sdf_texture, gl_FragCoord.xyz/height - 0.2)));//trunc((gl_FragCoord.xy - width/2)/width * crate_scale),0))));
                 return;
             } else if (object_hit == 2){
                 // Box
