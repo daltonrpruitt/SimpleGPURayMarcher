@@ -95,7 +95,7 @@ class RayMarchingWindow(BasicWindow):
         self.crate_sdf_texture = self.ctx.texture3d(size=(crate_res, crate_res, crate_res), components=1, data=crate_voxel_sdf,dtype="f4")
         self.crate_sdf_buffer = self.ctx.buffer(reserve=np.size(crate_voxel_sdf))
         self.crate_sdf_texture.read_into(self.crate_sdf_buffer)
-        print(self.crate_sdf_buffer.size)
+        #print(self.crate_sdf_buffer.size)
 
         self.vbo = self.ctx.buffer(vertices)
 

@@ -15,10 +15,20 @@ struct Plane {
     float shininess;
     float reflectiveness;
 };
+
+struct VoxelSDFInfo {
+    int id;
+    vec3 position;
+    vec3 rotation;
+    float scale;
+    vec3 color;
+    float shininess;
+    float reflectiveness;
+};
  
 //Plane information
-vec3 plane_norm = normalize(vec3(0., 1, -0));
-float plane_dist = 1;
+vec3 plane_norm = normalize(vec3(0., 1, 0));
+float plane_dist = 1.5;
 vec3 plane_color = vec3(0.2431, 0.7451, 0.0431);
 float plane_shininess = 16.0;
 float plane_reflectiveness = 0.3;
@@ -60,8 +70,11 @@ bool dir_light_shadow = false;
 
 
 // Object Voxel SDF Array : Dim = (resolution + 2)^2 *(resolution + 2)    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
-uniform  sampler3D crate_sdf_texture;
+uniform sampler3D crate_sdf_texture;
 uniform float crate_scale;
+uniform vec3 crate_rotation;
+
+VoxelSDFInfo crateSDF = VoxelSDFInfo(0, vec3(-0.5, 1, 3), vec3(0), crate_scale, vec3(0.902, 0.5412, 0.0706), 4.0, 0.0);
 
 
 int numObjects = 3;
@@ -70,8 +83,8 @@ int findMinInArray(float[3]);
 float rand(vec2);
 vec3 shade(vec4, vec3, vec3, vec3, float, bool[2]);
 float sdfSphere(Sphere, vec4, vec3);
-float sdfPlane(Plane, vec4, vec3);
-float sdfBox(vec3, vec3, vec4, vec3);
+float sdfPlane(Plane, vec3);
+float sdfBox(vec3, vec3, vec3);
 
 void marchRay(out int, inout vec4, in vec3, float);
 vec4 reflectedRayMarchColor(vec4, vec3 );
@@ -171,7 +184,7 @@ void main() {
                 f_color = plane.reflectiveness * reflection_color + 
                         (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
                 // should change something around here to get into the sampler3D
-                f_color = vec4(abs(texture(crate_sdf_texture, gl_FragCoord.xyz/height - 0.2)));//trunc((gl_FragCoord.xy - width/2)/width * crate_scale),0))));
+                // f_color = vec4(abs(texture(crate_sdf_texture, gl_FragCoord.xyz/height - 0.2)));//trunc((gl_FragCoord.xy - width/2)/width * crate_scale),0))));
                 return;
             } else if (object_hit == 2){
                 // Box
@@ -268,8 +281,8 @@ void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_d
         float signed_dist = max_dist;
 
         float sphere_signed_dist = sdfSphere(sphere, ray, ray_start);
-        float plane_signed_dist = sdfPlane(plane, ray, ray_start);
-        float box_signed_dist = sdfBox(box_dimensions, box_center, ray, ray_start);
+        float plane_signed_dist = sdfPlane(plane, ray.xyz * ray.w + ray_start);
+        float box_signed_dist = sdfBox(box_dimensions, box_center, ray.xyz * ray.w + ray_start);
         
         float distances[3];
         distances[0] = sphere_signed_dist;
@@ -334,12 +347,12 @@ vec3 getNormal(vec3 p, int object_hit){
 }
 
 
-float sdfPlane(Plane plane, vec4 ray, vec3 ray_start){
-    if(dot(ray.xyz , plane.normal) < 0){
-        // plane facing camera
+float sdfPlane(Plane plane, vec3 point){
+    if(dot(point, plane.normal) > -plane.distance){
+        // plane facing point
         // https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection
-        vec3 p_plane = plane.normal * -plane.distance;
-        return dot(ray_start + ray.xyz * ray.w - p_plane, plane.normal) + plane.distance; 
+        //vec3 p_plane = plane.normal * -plane.distance;
+        return dot(point, plane.normal) + plane.distance; 
     } else {
         return maxDistance;
     }
@@ -349,12 +362,30 @@ float sdfSphere(Sphere sph, vec4 ray, vec3 ray_start){
 }
 
 // Based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
-float sdfBox(vec3 dimensions, vec3 center, vec4 ray, vec3 ray_start) {
+float sdfBox(vec3 dimensions, vec3 center, vec3 point) {
     // translate box
-  vec3 q = abs(vec4(ray_start + ray.xyz * ray.w, 1.0)*translateFromVec3(-1.*box_center)*rotationY(box_rotation.y)).xyz - dimensions;
+  vec3 q = abs(vec4(point, 1.0)*translateFromVec3(-1.*box_center)*rotationY(box_rotation.y)).xyz - dimensions;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
 
+float sdfVoxelSDF(VoxelSDFInfo voxSDF, vec3 point) {
+    // Test if in Box shell first
+    // Probably some bugs in here
+    float shell_sdf = sdfBox(vec3(voxSDF.scale), voxSDF.position, point);
+    if(shell_sdf > 0.05) { return shell_sdf;}
+    
+    // Get sdf from index inside
+    float sdf; 
+    mat4 rotationMat = rotationX(voxSDF.rotation.x)*rotationY(voxSDF.rotation.y)*rotationZ(voxSDF.rotation.z);
+
+    vec3 sample_pos = ((vec4(point - voxSDF.position, 1.0)*rotationMat).xyz + vec3(voxSDF.scale/2))/voxSDF.scale;
+    if(voxSDF.id == 0) {
+        sdf = texture(crate_sdf_texture, sample_pos).x;
+    } else {
+        return maxDistance;
+    }
+    return sdf;
+}
 
 // Based on general structure of Dr. TJ Jankun-Kelly's Observable Notes: https://observablehq.com/@infowantstobeseen/basic-ray-marching
 vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, float obj_shininess, bool in_shadow[2]) {
