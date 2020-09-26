@@ -43,7 +43,7 @@ float plane_reflectiveness = 0.3;
 Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_reflectiveness);
 
 // Box Info
-uniform vec3 box_center = vec3(-2,  0., 8.);
+uniform vec3 box_center; // = vec3(-2,  0., 8.);
 vec3 box_dimensions = vec3(0);
 vec3 box_color = vec3(0.9686, 0.9843, 0.0118);
 float box_shininess = 32.0;
@@ -393,7 +393,7 @@ float sdfSphere(Sphere sph, vec4 ray, vec3 ray_start){
 // Based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
 float sdfBox(vec3 dimensions, vec3 center, vec3 rotation, vec3 point) {
     // translate box
-  vec3 q = abs(vec4(point, 1.0)*translateFromVec3(-1.*center)*rotationY(rotation.y)).xyz - dimensions;
+  vec3 q = abs(vec4(point, 1.0)*translateFromVec3(-1.*center)*rotationX(rotation.x)*rotationY(rotation.y)*rotationZ(rotation.z)).xyz - dimensions;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
 
@@ -401,7 +401,8 @@ float sdfVoxelSDF(VoxelSDFInfo voxSDF, vec3 point) {
     // Test if in Box shell first
     // Probably some bugs in here
     float shell_sd = sdfBox(vec3(voxSDF.scale), voxSDF.position, voxSDF.rotation, point);
-    if(shell_sd > 0.0001 ) { return shell_sd;}
+    float shell_offset = 0.001;
+    if(shell_sd > shell_offset ) { return shell_sd;}
     //return 0.000001;
     // Get sdf from index inside
     float sd; 
@@ -409,10 +410,13 @@ float sdfVoxelSDF(VoxelSDFInfo voxSDF, vec3 point) {
 
     vec3 sample_pos = ((vec4(point - voxSDF.position, 1.0)*rotationMat).xyz - vec3(voxSDF.scale))/(voxSDF.scale*2);
     if(voxSDF.id == 0) {
-        sd = texture(crate_sdf_texture, sample_pos).x;
+        sd = texture(crate_sdf_texture, sample_pos).x/(voxSDF.scale*2);
     } else {
-        sd = maxDistance;
+        sd = maxDistance; // should show errors real quick (unless dealing with plane...?)
     }
+    // if(sd > shell_sd) {
+    //     return sd - shell_sd; // Distance between shell and actual surface
+    // }
     return sd;
 }
 

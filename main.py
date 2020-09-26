@@ -38,6 +38,17 @@ class RayMarchingWindow(BasicWindow):
             fragment_shader=open("raymarch.frag", "r").read(),
 
         )
+
+        self.animate = False
+        self.show_sphere = False
+        self.show_box = False
+        self.show_crate = True
+
+
+
+
+
+
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
@@ -47,13 +58,25 @@ class RayMarchingWindow(BasicWindow):
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
 
-        self.prog['box_center'].value = (-1, 0, 8)
+
+        self.prog['box_center'].value = (-10, 0, 8)
         self.prog['box_rotation'].value = (0, 0, 0) # Degrees
         
         # Crate SDF
         self.prog['crate_center'].value = (0, 0, 8)
-        self.prog['crate_rotation'].value = (0, 5, 0)
+        self.prog['crate_rotation'].value = (0, 45/180, 0)
         self.prog['crate_scale'].value = 2 
+
+        offscreen_pos = (0, -100, -100)
+
+        if not self.show_sphere:
+            self.prog['sphere.center'].value = offscreen_pos
+
+        if not self.show_box:
+            self.prog['box_center'].value = offscreen_pos
+
+        if not self.show_crate:
+            self.prog['crate.position'].value = offscreen_pos
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0)
 
@@ -64,9 +87,6 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['using_point_light'] = True
         self.prog['using_dir_light'].value = False
-
-
-        self.animate = False
         
         vertices = np.array([
             -1, -1,
@@ -127,7 +147,11 @@ class RayMarchingWindow(BasicWindow):
         self.prog['height'].value = self.wnd.height
         self.vao.render()
         self.crate_sdf_texture.use()
-        self.prog['crate_rotation'].value = (0, time/3, 0)
+        
+        self.prog['crate_rotation'].value = (time/4, time/3, 0)
+        #self.prog['crate_center'].value = (0, 0, 7+np.cos(time)*3 )
+        #self.prog['light'].value = (1, 3+np.cos(time/2)*4, 0 , 1)
+        
         if self.animate:
             self.prog['sphere.center'].value = ( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
             self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2-np.pi ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
