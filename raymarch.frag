@@ -25,10 +25,17 @@ struct VoxelSDFInfo {
     float shininess;
     float reflectiveness;
 };
+// Object Voxel SDF Array : Dim = (resolution + 2)^2 *(resolution + 2)    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
+uniform sampler3D crate_sdf_texture;
+uniform vec3 crate_center;
+uniform vec3 crate_rotation;
+uniform float crate_scale;
+
+VoxelSDFInfo crateSDF = VoxelSDFInfo(0, crate_center, crate_rotation, crate_scale, vec3(0.7922, 0.549, 0.2275), 4.0, 0.0);
  
 //Plane information
 vec3 plane_norm = normalize(vec3(0., 1, 0));
-float plane_dist = 1.5;
+float plane_dist = 10;
 vec3 plane_color = vec3(0.2431, 0.7451, 0.0431);
 float plane_shininess = 16.0;
 float plane_reflectiveness = 0.3;
@@ -37,7 +44,7 @@ Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_
 
 // Box Info
 uniform vec3 box_center = vec3(-2,  0., 8.);
-vec3 box_dimensions = vec3(1);
+vec3 box_dimensions = vec3(0);
 vec3 box_color = vec3(0.9686, 0.9843, 0.0118);
 float box_shininess = 32.0;
 uniform vec3 box_rotation;
@@ -69,22 +76,17 @@ vec3 dir_light_color = vec3(1);
 bool dir_light_shadow = false;
 
 
-// Object Voxel SDF Array : Dim = (resolution + 2)^2 *(resolution + 2)    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
-uniform sampler3D crate_sdf_texture;
-uniform float crate_scale;
-uniform vec3 crate_rotation;
 
-VoxelSDFInfo crateSDF = VoxelSDFInfo(0, vec3(-0.5, 1, 3), vec3(0), crate_scale, vec3(0.902, 0.5412, 0.0706), 4.0, 0.0);
-
-
-int numObjects = 3;
-int findMinInArray(float[3]);
+#define NUM_OBJECTS 4
+int numObjects = NUM_OBJECTS;
+int findMinInArray(float[NUM_OBJECTS]);
 
 float rand(vec2);
 vec3 shade(vec4, vec3, vec3, vec3, float, bool[2]);
 float sdfSphere(Sphere, vec4, vec3);
 float sdfPlane(Plane, vec3);
-float sdfBox(vec3, vec3, vec3);
+float sdfBox(vec3, vec3, vec3, vec3);
+float sdfVoxelSDF(VoxelSDFInfo, vec3);
 
 void marchRay(out int, inout vec4, in vec3, float);
 vec4 reflectedRayMarchColor(vec4, vec3 );
@@ -191,6 +193,16 @@ void main() {
                 //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
                 f_color = vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess, in_shadows), 1.0);
                 return;
+            } else if (object_hit == 3){
+                // Crate
+                //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
+                // No lighting for now
+                in_shadows[0] = false;
+                in_shadows[1] = false;
+
+                f_color = vec4(shade(ray, p_hit, obj_normal, crateSDF.color, crateSDF.shininess, in_shadows), 1.0);
+                //f_color = vec4(0.8118, 0.1922, 0.1922, 1.0);
+                return;
             } else { 
                 // Error
                 f_color = vec4(0.9333, 0.0157, 0.0157, 1.0);
@@ -282,12 +294,14 @@ void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_d
 
         float sphere_signed_dist = sdfSphere(sphere, ray, ray_start);
         float plane_signed_dist = sdfPlane(plane, ray.xyz * ray.w + ray_start);
-        float box_signed_dist = sdfBox(box_dimensions, box_center, ray.xyz * ray.w + ray_start);
+        float box_signed_dist = sdfBox(box_dimensions, box_center, box_rotation, ray.xyz * ray.w + ray_start);
+        float crate_signed_dist = sdfVoxelSDF(crateSDF , ray.xyz * ray.w + ray_start);
         
-        float distances[3];
+        float distances[NUM_OBJECTS];
         distances[0] = sphere_signed_dist;
         distances[1] = plane_signed_dist;
         distances[2] = box_signed_dist;
+        distances[3] = crate_signed_dist;
         int obj_idx = findMinInArray(distances);
 
         int object_closer = -1;
@@ -332,15 +346,30 @@ vec3 getNormal(vec3 p, int object_hit){
             vec3 pos_y_norm = (vec4(0, 1, 0, 0)*transpose(rotationMat)).xyz;
             if (q.y > 0) {return pos_y_norm;}
             else  {return -1.*pos_y_norm;}
-        }
-        else {
+        } else {
             vec3 pos_z_norm = (vec4(0, 0, 1, 0)*transpose(rotationMat)).xyz;
             if (q.z > 0) {return pos_z_norm;}
             else  {return -1.*pos_z_norm;}
         }
-
         //return normalize((vec4(max(q,0.0) + min(max(q.x,max(q.y,q.z)),0.0), 1.0)*rotationY(-box_rotation.y)).xyz);
-        } else {
+
+    } else if (object_hit == 3) { // || object_hit == 4) {
+        // Crate SDF
+        //return vec3(0, 0, -1);
+        VoxelSDFInfo currVoxSDF; 
+        currVoxSDF = crateSDF;
+        float sd; 
+
+        
+        mat4 rotationMat = rotationX(currVoxSDF.rotation.x)*rotationY(currVoxSDF.rotation.y)*rotationZ(currVoxSDF.rotation.z);
+        mat4 inverseRotMat = rotationZ(-currVoxSDF.rotation.z)*rotationY(-currVoxSDF.rotation.y)*rotationX(-currVoxSDF.rotation.x);
+        vec3 sample_pos = ((vec4(p - currVoxSDF.position, 1.0)*rotationMat).xyz - vec3(currVoxSDF.scale))/(currVoxSDF.scale*2);
+        float deltDist = 0.005;
+        float deltSDFX = texture(crate_sdf_texture, sample_pos + vec3(deltDist, 0, 0)).x - texture(crate_sdf_texture, sample_pos - vec3(deltDist, 0,0)).x;
+        float deltSDFY = texture(crate_sdf_texture, sample_pos + vec3(0, deltDist, 0)).x - texture(crate_sdf_texture, sample_pos -  vec3(0, deltDist, 0)).x;
+        float deltSDFZ = texture(crate_sdf_texture, sample_pos +  vec3(0, 0, deltDist)).x - texture(crate_sdf_texture, sample_pos -  vec3(0, 0, deltDist)).x;
+        return normalize((vec4(vec3(deltSDFX, deltSDFY, deltSDFZ), 0.)*inverseRotMat).xyz);
+    } else {
         // Error
         return vec3(0.);
     }
@@ -362,29 +391,29 @@ float sdfSphere(Sphere sph, vec4 ray, vec3 ray_start){
 }
 
 // Based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
-float sdfBox(vec3 dimensions, vec3 center, vec3 point) {
+float sdfBox(vec3 dimensions, vec3 center, vec3 rotation, vec3 point) {
     // translate box
-  vec3 q = abs(vec4(point, 1.0)*translateFromVec3(-1.*box_center)*rotationY(box_rotation.y)).xyz - dimensions;
+  vec3 q = abs(vec4(point, 1.0)*translateFromVec3(-1.*center)*rotationY(rotation.y)).xyz - dimensions;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
 
 float sdfVoxelSDF(VoxelSDFInfo voxSDF, vec3 point) {
     // Test if in Box shell first
     // Probably some bugs in here
-    float shell_sdf = sdfBox(vec3(voxSDF.scale), voxSDF.position, point);
-    if(shell_sdf > 0.05) { return shell_sdf;}
-    
+    float shell_sd = sdfBox(vec3(voxSDF.scale), voxSDF.position, voxSDF.rotation, point);
+    if(shell_sd > 0.0001 ) { return shell_sd;}
+    //return 0.000001;
     // Get sdf from index inside
-    float sdf; 
+    float sd; 
     mat4 rotationMat = rotationX(voxSDF.rotation.x)*rotationY(voxSDF.rotation.y)*rotationZ(voxSDF.rotation.z);
 
-    vec3 sample_pos = ((vec4(point - voxSDF.position, 1.0)*rotationMat).xyz + vec3(voxSDF.scale/2))/voxSDF.scale;
+    vec3 sample_pos = ((vec4(point - voxSDF.position, 1.0)*rotationMat).xyz - vec3(voxSDF.scale))/(voxSDF.scale*2);
     if(voxSDF.id == 0) {
-        sdf = texture(crate_sdf_texture, sample_pos).x;
+        sd = texture(crate_sdf_texture, sample_pos).x;
     } else {
-        return maxDistance;
+        sd = maxDistance;
     }
-    return sdf;
+    return sd;
 }
 
 // Based on general structure of Dr. TJ Jankun-Kelly's Observable Notes: https://observablehq.com/@infowantstobeseen/basic-ray-marching
@@ -434,7 +463,7 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
 
 
 // Non-sorted array of floats
-int findMinInArray(float distances[3]){
+int findMinInArray(float distances[NUM_OBJECTS]){
     int min_idx = 0;
     float minimum = distances[0];
     for(int i = 1; i < distances.length(); i++ ) {

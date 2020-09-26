@@ -43,12 +43,17 @@ class RayMarchingWindow(BasicWindow):
         # self.prog['time'].value = 0
 
         self.prog['sphere.center'].value = (2.0, 2.0, 8.0)
-        self.prog['sphere.radius'].value = 1.0
+        self.prog['sphere.radius'].value = 0.0
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
 
         self.prog['box_center'].value = (-1, 0, 8)
         self.prog['box_rotation'].value = (0, 0, 0) # Degrees
+        
+        # Crate SDF
+        self.prog['crate_center'].value = (0, 0, 8)
+        self.prog['crate_rotation'].value = (0, 5, 0)
+        self.prog['crate_scale'].value = 2 
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0)
 
@@ -58,7 +63,10 @@ class RayMarchingWindow(BasicWindow):
         self.prog['cam_pos'].value = (0, 2, -5)
 
         self.prog['using_point_light'] = True
-        self.prog['using_dir_light'].value = True
+        self.prog['using_dir_light'].value = False
+
+
+        self.animate = False
         
         vertices = np.array([
             -1, -1,
@@ -81,7 +89,7 @@ class RayMarchingWindow(BasicWindow):
             file_name = "SDFs/crate_voxels_res-"+str(crate_res)
             crate_voxel_sdf = np.loadtxt(file_name,delimiter=",",dtype="float32")
         except OSError as e:
-            print("No crate file with resolution=" +str(crate_res))
+            print("No crate file with resolution=" +str(crate_res),"Actual error:",e)
             print("Exiting...")       
             exit()
         #print(crate_voxel_sdf.shape)
@@ -90,9 +98,9 @@ class RayMarchingWindow(BasicWindow):
         #print(crate_voxel_sdf.shape)
         
         # Remove padding on each of the dimensions (padded with 1's); also have to order to C_continguous for the texture creation below
-        crate_voxel_sdf = crate_voxel_sdf[1:-1, 1:-1, 1:-1].copy(order='C')
+        crate_voxel_sdf = crate_voxel_sdf.copy(order='C')#crate_voxel_sdf[1:-1, 1:-1, 1:-1].copy(order='C')
 
-        self.crate_sdf_texture = self.ctx.texture3d(size=(crate_res, crate_res, crate_res), components=1, data=crate_voxel_sdf,dtype="f4")
+        self.crate_sdf_texture = self.ctx.texture3d(size=(crate_res+2, crate_res+2, crate_res+2), components=1, data=crate_voxel_sdf,dtype="f4")
         self.crate_sdf_buffer = self.ctx.buffer(reserve=np.size(crate_voxel_sdf))
         self.crate_sdf_texture.read_into(self.crate_sdf_buffer)
         #print(self.crate_sdf_buffer.size)
@@ -119,10 +127,12 @@ class RayMarchingWindow(BasicWindow):
         self.prog['height'].value = self.wnd.height
         self.vao.render()
         self.crate_sdf_texture.use()
-        self.prog['sphere.center'].value = ( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
-        self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2-np.pi ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
-        self.prog['box_rotation'].value = (0, -time, 0)  #
-        #self.prog['cam_pos'].value = (0, 1+ np.sin(time)*0.7, -5)
+        self.prog['crate_rotation'].value = (0, time/3, 0)
+        if self.animate:
+            self.prog['sphere.center'].value = ( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+            self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2-np.pi ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+            self.prog['box_rotation'].value = (0, -time, 0)  #
+            #self.prog['cam_pos'].value = (0, 1+ np.sin(time)*0.7, -5)
 
 
 if __name__ == '__main__':
