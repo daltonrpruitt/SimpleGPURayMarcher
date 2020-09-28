@@ -31,7 +31,7 @@ uniform vec3 crate_center;
 uniform vec3 crate_rotation;
 uniform float crate_scale;
 
-VoxelSDFInfo crateSDFInfo = VoxelSDFInfo(0, crate_center, crate_rotation, crate_scale, vec3(0.7922, 0.549, 0.2275), 4.0); // , 0.0);
+VoxelSDFInfo crateSDFInfo = VoxelSDFInfo(0, crate_center, crate_rotation, crate_scale, vec3(0.7922, 0.549, 0.2275), 1.0); // , 0.0);
 uniform VoxelSDFInfo linkSDFInfo;
 layout(binding = 1) uniform sampler3D link_sdf_texture;
 
@@ -100,7 +100,8 @@ mat4 rotationX(in float);
 mat4 rotationY(in float);
 mat4 rotationZ(in float);
 mat4 translateFromVec3(in vec3);
-
+mat4 rotationFromVec3(in vec3);
+mat4 invRotationFromVec3(in vec3);
 void main() {
 
     vec2 window_size = vec2(width,height);
@@ -201,8 +202,8 @@ void main() {
                 // Crate
                 //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
                 // No lighting for now
-                //in_shadows[0] = false;
-                //in_shadows[1] = false;
+                in_shadows[0] = false;
+                in_shadows[1] = false;
                 VoxelSDFInfo currSDF = object_hit == 3 ? crateSDFInfo : linkSDFInfo;
                 f_color = vec4(shade(ray, p_hit, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
                 //f_color = vec4(0.8118, 0.1922, 0.1922, 1.0);
@@ -287,8 +288,8 @@ vec4 reflectedRayMarchColor(vec4 reflected_ray, vec3 reflection_origin){
         // Crate
         //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
         // No lighting for now
-        //in_shadows[0] = false;
-        //in_shadows[1] = false;
+        in_shadows[0] = false;
+        in_shadows[1] = false;
         VoxelSDFInfo currSDF = object_hit == 3 ? crateSDFInfo : linkSDFInfo;
 
         return vec4(shade(reflected_ray, reflection_origin, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
@@ -351,7 +352,7 @@ vec3 getNormal(vec3 p, int object_hit){
         // Box - based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
         // Change to evaluating the gradient of the sdf at 6 offset positions
         //vec3 q = (vec4(p, 1.0)*translateFromVec3(-1.*box_center)*rotationY(box_rotation.y)).xyz - box_dimensions; // change to not global...
-        mat4 rotationMat = rotationY(box_rotation.y);
+        mat4 rotationMat = rotationFromVec3(box_rotation);// rotationY(box_rotation.y);
         vec3 q = (vec4(p, 1.0)*translateFromVec3(-1.*box_center)*rotationMat).xyz;
         if ( abs(abs(q.x) - box_dimensions.x) <= 0.001) {
             vec3 pos_x_norm = (vec4(1, 0, 0, 0)*transpose(rotationMat)).xyz;
@@ -377,8 +378,9 @@ vec3 getNormal(vec3 p, int object_hit){
         else { currVoxSDF = linkSDFInfo;}
         vec3 rot = currVoxSDF.rotation;
         // Store rotation and inverse rotation 
-        mat4 rotationMat = rotationX(rot.x)*rotationY(rot.y)*rotationZ(rot.z);
-        mat4 inverseRotMat = rotationZ(-rot.z)*rotationY(-rot.y)*rotationX(-rot.x);
+
+        mat4 rotationMat = rotationFromVec3(rot);
+        mat4 inverseRotMat = invRotationFromVec3(rot);
         vec3 sample_pos = ((vec4(p - currVoxSDF.position, 1.0)*rotationMat).xyz - vec3(currVoxSDF.scale))/(currVoxSDF.scale*2);
         float deltDist = 0.01;
         float deltSDFX, deltSDFY, deltSDFZ;
@@ -416,7 +418,7 @@ float sdfSphere(Sphere sph, vec4 ray, vec3 ray_start){
 // Based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm
 float sdfBox(vec3 dimensions, vec3 center, vec3 rotation, vec3 point) {
     // translate box
-  vec3 q = abs(vec4(point - center, 1.0)*rotationX(rotation.x)*rotationY(rotation.y)*rotationZ(rotation.z)).xyz - dimensions;
+  vec3 q = abs(vec4(point - center, 1.0)*rotationFromVec3(rotation)).xyz - dimensions;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
 
@@ -424,20 +426,20 @@ float sdfVoxelSDF(VoxelSDFInfo voxSDF, vec3 point) {
     // Test if in Box shell first
     // Probably some bugs in here
     float shell_sd = sdfBox(vec3(voxSDF.scale), voxSDF.position, voxSDF.rotation, point);
-    float shell_offset = 0.005;
+    float shell_offset = 0.0005;
     if(shell_sd > shell_offset ) { return shell_sd;}
     //return 0.000001;
 
     // Get sdf from index inside
     float sd; 
-    mat4 rotationMat = rotationX(voxSDF.rotation.x)*rotationY(voxSDF.rotation.y)*rotationZ(voxSDF.rotation.z);
+    mat4 rotationMat = rotationFromVec3(voxSDF.rotation);//rotationX(voxSDF.rotation.x)*rotationY(voxSDF.rotation.y)*rotationZ(voxSDF.rotation.z);
 
 
     vec3 sample_pos = ((vec4(point - voxSDF.position, 1.0)*rotationMat).xyz)/(voxSDF.scale*2); 
     
-    if(!all(lessThan(abs(sample_pos), vec3(0.5)))) {
-        return shell_offset;
-    }
+    //if(!all(lessThan(abs(sample_pos), vec3(0.5)))) {
+    //    return shell_offset;
+    //}
     
 
     sample_pos += vec3(0.5);
@@ -545,4 +547,12 @@ mat4 translateFromVec3(in vec3 offset) {
 			 		0,	1,	0,	offset.y,
 					0,	0,	1,	offset.z,
 					0,	0,	0,	    1);
+}
+
+mat4 rotationFromVec3(in vec3 rotations) {
+    return rotationY(rotations.y)*rotationX(rotations.x)*rotationZ(rotations.z);
+}
+
+mat4 invRotationFromVec3(in vec3 rotations) {
+    return rotationZ(-rotations.z)*rotationX(-rotations.x)*rotationY(-rotations.y);
 }

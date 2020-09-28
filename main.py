@@ -64,10 +64,10 @@ class RayMarchingWindow(BasicWindow):
         self.prog['box_rotation'].value = (0, 0, 0) # Degrees
         
         # Crate SDF
-        crate_res = 64
+        crate_res = 200
         self.prog['crate_scale'].value = 1
-        self.prog['crate_center'].value = (1, 0, 5*self.prog['crate_scale'].value)
-        self.prog['crate_rotation'].value = (0, 45/180, 0)
+        self.prog['crate_center'].value = (1.5, 0.5, 5*self.prog['crate_scale'].value)
+        self.prog['crate_rotation'].value = (np.pi/4, np.pi/4, np.pi/6)
 
         # Toon Link SDF
         link_res = 200
@@ -82,7 +82,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['light'].value = (2., 3, 0., 1.)
         self.prog['light_color'].value = (1., 1., 1.)
 
-        self.prog['cam_pos'].value = (0, 2, -5)
+        self.prog['cam_pos'].value = (0, 0, -5)
 
         self.prog['using_point_light'].value = True
         self.prog['using_dir_light'].value = False
@@ -95,7 +95,7 @@ class RayMarchingWindow(BasicWindow):
             
         # self.prog['linkSDFInfo'].value = (1, (0, 1, 8), (0.,0.,0.), 1.0, (0.1, 0.5, 0.7),  4.0 )
         self.prog['linkSDFInfo.id'].value = 1
-        self.prog['linkSDFInfo.position'].value = (-1.5, 0, (4+5)*self.link_scale - 5)
+        self.prog['linkSDFInfo.position'].value = (-1.5, 0.1, (5+5)*self.link_scale - 5)
         self.prog['linkSDFInfo.rotation'].value = (0.,0.,0.)
         self.prog['linkSDFInfo.scale'].value =  self.link_scale
         self.prog['linkSDFInfo.color'] =  (0.1, 0.5, 0.7)
@@ -139,11 +139,16 @@ class RayMarchingWindow(BasicWindow):
 
         # Construct VBO for SDF Voxel Sampler
 
+    
         try:
-            file_name = "SDFs/crate_voxels_res-"+str(crate_res)
-            crate_voxel_sdf = np.loadtxt(file_name,delimiter=",",dtype="float32")
+            try:
+                file_name = "SDFs/crate_voxels_res-"+str(crate_res)
+                crate_voxel_sdf = np.loadtxt(file_name,delimiter=",",dtype="float32")
+            except OSError:
+                file_name = "SDFs/crate_voxels_nopad_depthSign_res-"+str(crate_res)
+                crate_voxel_sdf = np.loadtxt(file_name,delimiter=",",dtype="float32")
         except OSError as e:
-            print("No crate file with resolution=" +str(crate_res),"Actual error:",e)
+            print("No Crate file with resolution=" +str(crate_res),"Actual error:",e)
             print("Exiting...")       
             exit()
         #print(crate_voxel_sdf.shape)
@@ -154,8 +159,9 @@ class RayMarchingWindow(BasicWindow):
         #self.crate_sdf_texture = self.ctx.texture3d(size=(crate_res+2, crate_res+2, crate_res+2), components=1, data=crate_voxel_sdf,dtype="f4")
 
         # Reshape to 3D, create texture, create buffer, read texture data into buffer
-        crate_voxel_sdf = np.reshape(crate_voxel_sdf, newshape=(crate_res+2, crate_res+2 , crate_res+2 ), order='C') # No Padding
-        self.crate_sdf_texture = self.ctx.texture3d(size=(crate_res+2, crate_res+2, crate_res+2), components=1, data=crate_voxel_sdf,dtype="f4")
+        crate_voxel_sdf = np.reshape(crate_voxel_sdf, newshape=(crate_res, crate_res , crate_res ), order='C')
+        #crate_voxel_sdf = crate_voxel_sdf[1:-1,1:-1,1:-1].copy( )# get rid of padding
+        self.crate_sdf_texture = self.ctx.texture3d(size=(crate_res, crate_res, crate_res), components=1, data=crate_voxel_sdf,dtype="f4")
         self.crate_sdf_buffer = self.ctx.buffer(reserve=np.size(crate_voxel_sdf))
         self.crate_sdf_texture.read_into(self.crate_sdf_buffer)
         #print(self.crate_sdf_buffer.size)
@@ -178,7 +184,7 @@ class RayMarchingWindow(BasicWindow):
             link_voxel_sdf = np.reshape(link_voxel_sdf, newshape=(link_res, link_res, link_res), order='C') # No Padding
             self.link_sdf_texture = self.ctx.texture3d(size=(link_res, link_res, link_res), components=1, data=link_voxel_sdf,dtype="f4")
         except ValueError:
-            link_voxel_sdf = np.reshape(link_voxel_sdf, newshape=(link_res+2, link_res+2, link_res+2 ), order='C') # No Padding
+            link_voxel_sdf = np.reshape(link_voxel_sdf, newshape=(link_res+2, link_res+2, link_res+2 ), order='C') 
             self.link_sdf_texture = self.ctx.texture3d(size=(link_res+2, link_res+2, link_res+2), components=1, data=link_voxel_sdf,dtype="f4")
 
         self.link_sdf_buffer = self.ctx.buffer(reserve=np.size(link_voxel_sdf))
@@ -208,8 +214,8 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         
-        self.prog['crate_rotation'].value = (0, time/3, 0)
-        self.prog['linkSDFInfo.rotation'] =  (0, -time/2, 0)
+        self.prog['crate_rotation'].value = (np.pi/4, time, np.pi/4)
+        self.prog['linkSDFInfo.rotation'] =  (np.pi/12, -time, np.pi/12)
 
         '''struct VoxelSDFInfo {int id; vec3 pos; vec3 rot; float scl; vec3 col; float sh; float reflectiveness;};'''
         '''self.prog['linkSDFInfo.id'].value = 1
