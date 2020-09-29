@@ -1,3 +1,9 @@
+# Large files that do not need to be saved
+SDFs/*
+.idea/workspace-*
+main-*.py
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
