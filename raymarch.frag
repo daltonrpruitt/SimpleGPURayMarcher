@@ -102,6 +102,9 @@ mat4 rotationZ(in float);
 mat4 translateFromVec3(in vec3);
 mat4 rotationFromVec3(in vec3);
 mat4 invRotationFromVec3(in vec3);
+
+
+
 void main() {
 
     vec2 window_size = vec2(width,height);
@@ -111,17 +114,17 @@ void main() {
     vec4 color = vec4(0,0,0,0);
     
     // From page 310 of Shirley and Marschner
-    int sample_frequency = 2; // 
-    //for(int p = 0; p < sample_frequency; p++) {  
-        //for(int q = 0; q < sample_frequency; q++) {  
+    int sample_frequency = 1; // 
+    for(int p = 0; p < sample_frequency; p++) {  
+        for(int q = 0; q < sample_frequency; q++) {  
         
             // Make rays offset uniform amounts from center
             
-            //vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
-            //float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
-            //vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
+            vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
+            float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
+            vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
             
-            vec4 ray = vec4(normalize(vec3((gl_FragCoord.xy - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 0.001);
+            vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 0.001);
             //for(int i = 0; i < march_iterations; i++) {
             // TODO: Loop over objects
             int object_hit;
@@ -179,8 +182,8 @@ void main() {
 
             if (object_hit == 0) {
                 // Sphere
-                f_color = vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
-               return;
+                color += vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
+                //return;
             } else if (object_hit == 1){
                 // Plane
                 vec4 reflection_color = vec4(0);
@@ -188,15 +191,15 @@ void main() {
                     vec4 r = vec4(reflect(ray.xyz, obj_normal), 0.0001);
                     reflection_color = reflectedRayMarchColor(r, p_hit + r.w*r.xyz);
                 }
-                f_color = plane.reflectiveness * reflection_color + 
+                color += plane.reflectiveness * reflection_color + 
                         (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
                 // should change something around here to get into the sampler3D
                 // f_color = vec4(abs(texture(crate_sdf_texture, gl_FragCoord.xyz/height - 0.2)));//trunc((gl_FragCoord.xy - width/2)/width * crate_scale),0))));
-                return;
+                //return;
             } else if (object_hit == 2){
                 // Box
                 //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-                f_color = vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess, in_shadows), 1.0);
+                color += vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess, in_shadows), 1.0);
                 return;
             } else if (object_hit == 3 || object_hit == 4){
                 // Crate
@@ -205,17 +208,18 @@ void main() {
                 in_shadows[0] = false;
                 in_shadows[1] = false;
                 VoxelSDFInfo currSDF = object_hit == 3 ? crateSDFInfo : linkSDFInfo;
-                f_color = vec4(shade(ray, p_hit, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
+                color += vec4(shade(ray, p_hit, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
                 //f_color = vec4(0.8118, 0.1922, 0.1922, 1.0);
-                return;
+                //return;
             } else { 
                 // Error
                 f_color = vec4(0.9333, 0.0157, 0.0157, 1.0);
+                return;
             }
-           // f_color = vec4(vec3((1.0 + obj_in_way) / 2.0), 1.0);
+           f_color = color/pow(sample_frequency,2.0);
 
-        //}
-    //}
+        }
+    }
     
 
 }
@@ -382,7 +386,7 @@ vec3 getNormal(vec3 p, int object_hit){
         mat4 rotationMat = rotationFromVec3(rot);
         mat4 inverseRotMat = invRotationFromVec3(rot);
         vec3 sample_pos = ((vec4(p - currVoxSDF.position, 1.0)*rotationMat).xyz - vec3(currVoxSDF.scale))/(currVoxSDF.scale*2);
-        float deltDist = 0.01;
+        float deltDist = 0.03;
         float deltSDFX, deltSDFY, deltSDFZ;
         if(object_hit == 3) { // Crate
             deltSDFX = texture(crate_sdf_texture, sample_pos + vec3(deltDist, 0, 0)).x - texture(crate_sdf_texture, sample_pos - vec3(deltDist, 0,0)).x;
