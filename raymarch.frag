@@ -130,7 +130,7 @@ void main() {
     vec4 color = vec4(0,0,0,0);
     
     // From page 310 of Shirley and Marschner
-    int sample_frequency = 4; // 
+    int sample_frequency = 1; // 
     for(int p = 0; p < sample_frequency; p++) {  
         for(int q = 0; q < sample_frequency; q++) {  
         
@@ -148,98 +148,11 @@ void main() {
             //marchRay(object_hit, ray, cam_pos, maxDistance);
             color += iterativeDepthMarchRay(ray, cam_pos, maxDistance);
             
-            /*
-            if(object_hit == -1) {
-                // Hit nothing
-                f_color = back_color; 
-                return;
-            } 
-
-            vec3 p_hit = cam_pos + ray.xyz*ray.w;
-            vec3 obj_normal = getNormal(p_hit, object_hit);
-            //f_color = vec4(obj_normal*vec3(2, 2, 3), 1); 
-            vec3 to_light;
-            float max_dist; 
-
-            float numLights = 0;
-
-            bool in_shadows[2];
-            in_shadows[0] = false;
-            in_shadows[1] = false;
-
-            if(using_point_light){
-                numLights = numLights + 1;
-                to_light = normalize(light.xyz - p_hit);
-                max_dist = length(light.xyz - p_hit)+1;
-                vec4 shadow_ray = vec4(to_light, 0.001);
-                int obj_in_way;
-                marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-                if (obj_in_way != -1){
-                // In shadow
-                    //in_shadows = in_shadows + 1;
-                    in_shadows[0] = true;
-                }
-
-            }
-            if (using_dir_light) {
-                numLights = numLights + 1;
-                to_light = -1.0 * dir_light;
-                max_dist = maxDistance;
-                vec4 shadow_ray = vec4(to_light, 0.001);
-                int obj_in_way;
-                marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-                if (obj_in_way != -1){
-                    // In shadow            
-                    in_shadows[1] = true;
-                    //in_shadows = in_shadows + 1;
-                    //dir_light_shadow = true;
-                }
-            }
-            if(numLights == 0) { f_color = vec4(0.0); return;}
-            //float shadow_fraction = in_shadows/numLights;
             
-
-            if (object_hit == 0) {
-                // Sphere
-                color += vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
-                //return;
-            } else if (object_hit == 1){
-                // Plane
-                vec4 reflection_color = vec4(0);
-                if(plane.reflectiveness > 0){
-                    vec4 r = vec4(reflect(ray.xyz, obj_normal), 0.0001);
-                    reflection_color = reflectedRayMarchColor(r, p_hit + r.w*r.xyz);
-                }
-                color += plane.reflectiveness * reflection_color + 
-                        (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
-                // should change something around here to get into the sampler3D
-                // f_color = vec4(abs(texture(crate_sdf_texture, gl_FragCoord.xyz/height - 0.2)));//trunc((gl_FragCoord.xy - width/2)/width * crate_scale),0))));
-                //return;
-            } else if (object_hit == 2){
-                // Box
-                //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-                color += vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess, in_shadows), 1.0);
-                return;
-            } else if (object_hit == 3 || object_hit == 4){
-                // Crate
-                //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-                // No lighting for now
-                in_shadows[0] = false;
-                in_shadows[1] = false;
-                VoxelSDFInfo currSDF = object_hit == 3 ? crateSDFInfo : linkSDFInfo;
-                color += vec4(shade(ray, p_hit, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
-                //f_color = vec4(0.8118, 0.1922, 0.1922, 1.0);
-                //return;
-            } else { 
-                // Error
-                f_color = vec4(0.9333, 0.0157, 0.0157, 1.0);
-                return;
-            }
-            */
-           f_color = color/pow(sample_frequency,2.0);
 
         }
     }
+    f_color = color/pow(sample_frequency,2.0);
     
 
 }
@@ -415,44 +328,25 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
             obj_color = plane.color;
             obj_shininess = plane.shininess;
             obj_reflectiveness = plane.reflectiveness;
-            /*
-            vec4 reflection_color = back_color;
-            if(plane.reflectiveness > 0){
-                vec4 r = vec4(reflect(ray.xyz, obj_normal), 0.0001);
-                reflection_color = iterativeDepthMarchRay(r,  p_hit + r.w*r.xyz, max_dist, curr_depth + 1);
-            }
-            return plane.reflectiveness * reflection_color + 
-                    (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
-            */
-            // should change something around here to get into the sampler3D
-            // f_color = vec4(abs(texture(crate_sdf_texture, gl_FragCoord.xyz/height - 0.2)));//trunc((gl_FragCoord.xy - width/2)/width * crate_scale),0))));
-            //return;
+
         } else if (object_hit == 2){
             // Box
             obj_color = box.color;
             obj_shininess = box.shininess;
             //obj_reflectiveness = box.reflectiveness;
 
-            //return vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess, in_shadows), 1.0);
         } else if (object_hit == 3){
+            // Crate SDF
             obj_color = crateSDFInfo.color;
             obj_shininess = crateSDFInfo.shininess;
             obj_reflectiveness = crateSDFInfo.reflectiveness;
 
         } else if (object_hit == 4){
-            // SDF
-
-            //VoxelSDFInfo currSDF; 
-            //if(object_hit == 3) {currSDF = crateSDFInfo; }
-            //else { currSDF = linkSDFInfo;}
+            // Link SDF
             obj_color = linkSDFInfo.color;
             obj_shininess = linkSDFInfo.shininess;
             obj_reflectiveness = linkSDFInfo.reflectiveness;
 
-
-            //return vec4(shade(ray, p_hit, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
-            //f_color = vec4(0.8118, 0.1922, 0.1922, 1.0);
-            //return;
         } else { 
             // Error
             return vec4(0.9333, 0.0157, 0.0157, 1.0);
@@ -466,7 +360,8 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         ray = vec4(reflect(ray.xyz, obj_normal), 0.001);
         ray_start = p_hit;
 
-        // Transparency
+        // TODO: Transparency
+        // Shoot transmission rays here
 
     }
     return output_color / i;
