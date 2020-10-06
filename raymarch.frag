@@ -134,18 +134,14 @@ void main() {
     for(int p = 0; p < sample_frequency; p++) {  
         for(int q = 0; q < sample_frequency; q++) {  
         
-            // Make rays offset uniform amounts from center
-            
+            // Make rays offset uniform amounts from center (pg 310)
             vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
             float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
             vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
             
             vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 0.001);
-            //for(int i = 0; i < march_iterations; i++) {
-            // TODO: Loop over objects
-            int object_hit;
-
-            //marchRay(object_hit, ray, cam_pos, maxDistance);
+            
+            // I would really like to make a centralized "object" struct, but oh well ¯\_(ツ)_/¯
             color += iterativeDepthMarchRay(ray, cam_pos, maxDistance);
             
             
