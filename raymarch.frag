@@ -8,6 +8,20 @@ struct Sphere {
     float reflectiveness;
 };
 
+struct Light {
+    vec3 point;
+    vec3 color;
+    float intensity;
+};
+
+struct SphereLight {
+    vec3 center;
+    float radius;
+    vec3 color;
+    float intensity;
+};
+
+SphereLight volLight = SphereLight(vec3(0, 3, 5), 1, vec3(1), 1);
 
 struct Plane {
     vec3 normal;
@@ -83,7 +97,7 @@ out vec4 f_color;
 
 
 int march_iterations = 1024;
-int max_depth = 2;
+int max_depth = 5;
 uniform vec3 cam_pos; // = vec3(0.0, 0.0, -10.0);
 float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
@@ -107,7 +121,6 @@ float sdfVoxelSDF(VoxelSDFInfo, vec3);
 void marchRay(out int, inout vec4, in vec3, float);
 vec4 iterativeDepthMarchRay(inout vec4, in vec3, in float);
 
-vec4 reflectedRayMarchColor(vec4, vec3 );
 vec3 getNormal(vec3, int);
 void check_shadows(in vec3, in vec3, in float, in out bool[2]);
 
@@ -153,85 +166,6 @@ void main() {
 
 }
 
-vec4 reflectedRayMarchColor(vec4 reflected_ray, vec3 reflection_origin){
-    int object_hit;
-    marchRay(object_hit, reflected_ray, reflection_origin, maxDistance);
-
-    if(object_hit == -1) {
-        // Hit nothing
-        return back_color; 
-    } 
-
-    vec3 p_hit = reflection_origin + reflected_ray.xyz*reflected_ray.w;
-    vec3 obj_normal = getNormal(p_hit, object_hit);
-    //f_color = vec4(obj_normal*vec3(2, 2, 3), 1); 
-    vec3 to_light;
-    float max_dist = maxDistance; 
-    float numLights = 0;
-    //float in_shadows = 0;
-    bool in_shadows[2];
-    in_shadows[0] = false;
-    in_shadows[1] = false;
-
-    if(using_point_light){
-        numLights = numLights + 1;
-        to_light = normalize(light.xyz - p_hit);
-        max_dist = length(light.xyz - p_hit);
-        vec4 shadow_ray = vec4(to_light, 0.001);
-        int obj_in_way;
-        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-        if (obj_in_way != -1){
-        // In shadow
-            in_shadows[0] = true;
-            //in_shadows = in_shadows + 1;
-        }
-
-    }
-    if (using_dir_light) {
-        numLights = numLights + 1;
-        to_light = -1.0 * dir_light;
-        max_dist = maxDistance;
-        vec4 shadow_ray = vec4(to_light, 0.001);
-        int obj_in_way;
-        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-        if (obj_in_way != -1){
-        // In shadow
-            in_shadows[1] = true;
-            //in_shadows = in_shadows + 1;
-        }
-    }
-
-
-    //float reflected_shadow_fraction = in_shadows/numLights;
-    
-    if(in_shadows[0] && in_shadows[1]) {
-        return vec4(0);
-    }
-    if (object_hit == 0) {
-        // Sphere
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
-    } else if (object_hit == 1){
-        // Plane
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
-    } else if (object_hit == 2){
-        // Box
-        //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, box_color, box_shininess, in_shadows), 1.0);
-    } else if (object_hit == 3 || object_hit == 4){
-        // Crate
-        //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-        // No lighting for now
-        in_shadows[0] = false;
-        in_shadows[1] = false;
-        VoxelSDFInfo currSDF = object_hit == 3 ? crateSDFInfo : linkSDFInfo;
-
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
-
-    } else { 
-        // Error
-        return vec4(0.9333, 0.0157, 0.0157, 1.0);
-    }
-}
 
 void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_dist){
     
