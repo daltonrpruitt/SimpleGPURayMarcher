@@ -41,9 +41,9 @@ class RayMarchingWindow(BasicWindow):
         )
 
         self.animate = False
-        self.show_sphere = False
+        self.show_sphere = True
         self.show_box = False
-        self.show_crate = True
+        self.show_crate = False
         self.show_link = True
 
 
@@ -55,11 +55,11 @@ class RayMarchingWindow(BasicWindow):
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
 
-        self.prog['sphere.center'].value = (2.0, 2.0, 8.0)
+        self.prog['sphere.center'].value = (1.0, 2.0, 5.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
-
+        self.prog['sphere.reflectiveness'].value = 0.6
 
         self.prog['box_center'].value = (-1, 0, 8)
         self.prog['box_rotation'].value = (0, 0, 0) # Degrees
@@ -78,9 +78,9 @@ class RayMarchingWindow(BasicWindow):
 
 
 
-        self.prog['back_color'].value = (0, 0.3, 0.9, 1.0)
+        self.prog['back_color'].value = (0, 0.3, 0.9, 1.0) #(1,1,1, 1)
 
-        self.prog['light'].value = (2., 3, 0., 1.)
+        self.prog['light'].value = (2., 2, 0., 1.)
         self.prog['light_color'].value = (1., 1., 1.)
 
         self.prog['cam_pos'].value = (0, 0, -5)
@@ -97,10 +97,11 @@ class RayMarchingWindow(BasicWindow):
         #self.prog['linkSDFInfo'].value = (1, (0, 1, 8), (0.,0.,0.), 1.0, (0.1, 0.5, 0.7),  4.0 )
         self.prog['linkSDFInfo.id'].value = 1
         self.prog['linkSDFInfo.position'].value = (-1.5, 0.1, (5+5)*self.link_scale - 5)
-        self.prog['linkSDFInfo.rotation'].value = (0, -np.pi/4, 0.)
+        self.prog['linkSDFInfo.rotation'].value = (0, -np.pi/2, 0.)
         self.prog['linkSDFInfo.scale'].value =  self.link_scale
         self.prog['linkSDFInfo.color'] =  (0.1, 0.5, 0.7)
-        self.prog['linkSDFInfo.shininess'] =  4.0
+        self.prog['linkSDFInfo.shininess'] =  16.0
+        self.prog['linkSDFInfo.reflectiveness'] =  0.6
         #linksdf.reflectiveness=  0.0
         '''for name in self.prog:
             member = self.prog[name]
@@ -237,8 +238,8 @@ class RayMarchingWindow(BasicWindow):
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         
-        self.prog['crate_rotation'].value = (np.pi/4, time, np.pi/4)
-        self.prog['linkSDFInfo.rotation'] =  (np.pi/12, -time, np.pi/12)
+        #self.prog['crate_rotation'].value = (np.pi/4, time, np.pi/4)
+        #self.prog['linkSDFInfo.rotation'] =  (np.pi/12, -time, np.pi/12)
         
         self.vao.render()
 
@@ -246,9 +247,11 @@ class RayMarchingWindow(BasicWindow):
         #self.prog['light'].value = (1, 3+np.cos(time/2)*4, 0 , 1)
         
         if self.animate:
-            self.prog['sphere.center'].value = ( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
-            self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2 ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
-            self.prog['box_rotation'].value = (0, -time, 0)  #
+            if self.show_sphere:
+                self.prog['sphere.center'].value = (1, 0, 8.0 + np.sin(time/2) *2)#( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+            if self.show_box:
+                self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2 ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+                self.prog['box_rotation'].value = (0, -time, 0)  #
             #self.prog['cam_pos'].value = (0, 1+ np.sin(time)*0.7, -5)
 
 

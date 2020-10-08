@@ -5,8 +5,23 @@ struct Sphere {
     float radius;
     vec3 color;
     float shininess;
+    float reflectiveness;
 };
 
+struct Light {
+    vec3 point;
+    vec3 color;
+    float intensity;
+};
+
+struct SphereLight {
+    vec3 center;
+    float radius;
+    vec3 color;
+    float intensity;
+};
+
+SphereLight volLight = SphereLight(vec3(0, 3, 5), 1, vec3(1), 1);
 
 struct Plane {
     vec3 normal;
@@ -23,17 +38,19 @@ struct VoxelSDFInfo {
     float scale;
     vec3 color;
     float shininess;
-    //float reflectiveness;
+    float reflectiveness;
 };
 // Object Voxel SDF Array : Dim = (resolution + 2)^2 *(resolution + 2)    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
-layout(binding = 0) uniform sampler3D crate_sdf_texture;
 uniform vec3 crate_center;
 uniform vec3 crate_rotation;
 uniform float crate_scale;
 
-VoxelSDFInfo crateSDFInfo = VoxelSDFInfo(0, crate_center, crate_rotation, crate_scale, vec3(0.7922, 0.549, 0.2275), 1.0); // , 0.0);
+VoxelSDFInfo crateSDFInfo = VoxelSDFInfo(0, crate_center, crate_rotation, crate_scale, vec3(0.7922, 0.549, 0.2275), 8.0,  0.0);
+layout(binding = 0) uniform sampler3D crate_sdf_texture;
+
 uniform VoxelSDFInfo linkSDFInfo;
 layout(binding = 1) uniform sampler3D link_sdf_texture;
+vec3 temp_color = linkSDFInfo.color;
 
 //Plane information
 vec3 plane_norm = normalize(vec3(0., 1, -.0));
@@ -51,7 +68,15 @@ vec3 box_color = vec3(0.9686, 0.9843, 0.0118);
 float box_shininess = 32.0;
 uniform vec3 box_rotation;
 
+struct Box {
+    vec3 center;
+    vec3 dimensions;
+    vec3 color;
+    float shininess;
 
+};
+
+Box box = Box(box_center, box_dimensions, box_color, box_shininess);
 
 uniform float width;
 uniform float height;
@@ -72,6 +97,7 @@ out vec4 f_color;
 
 
 int march_iterations = 1024;
+int max_depth = 5;
 uniform vec3 cam_pos; // = vec3(0.0, 0.0, -10.0);
 float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
@@ -93,8 +119,11 @@ float sdfBox(vec3, vec3, vec3, vec3);
 float sdfVoxelSDF(VoxelSDFInfo, vec3);
 
 void marchRay(out int, inout vec4, in vec3, float);
-vec4 reflectedRayMarchColor(vec4, vec3 );
+vec4 iterativeDepthMarchRay(inout vec4, in vec3, in float);
+
 vec3 getNormal(vec3, int);
+void check_shadows(in vec3, in vec3, in float, in out bool[2]);
+
 
 mat4 rotationX(in float);
 mat4 rotationY(in float);
@@ -118,191 +147,25 @@ void main() {
     for(int p = 0; p < sample_frequency; p++) {  
         for(int q = 0; q < sample_frequency; q++) {  
         
-            // Make rays offset uniform amounts from center
-            
+            // Make rays offset uniform amounts from center (pg 310)
             vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
             float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
             vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
             
             vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 0.001);
-            //for(int i = 0; i < march_iterations; i++) {
-            // TODO: Loop over objects
-            int object_hit;
-            marchRay(object_hit, ray, cam_pos, maxDistance);
             
-            if(object_hit == -1) {
-                // Hit nothing
-                f_color = back_color; 
-                return;
-            } 
-
-            vec3 p_hit = cam_pos + ray.xyz*ray.w;
-            vec3 obj_normal = getNormal(p_hit, object_hit);
-            //f_color = vec4(obj_normal*vec3(2, 2, 3), 1); 
-            vec3 to_light;
-            float max_dist; 
-
-            float numLights = 0;
-
-            bool in_shadows[2];
-            in_shadows[0] = false;
-            in_shadows[1] = false;
-
-            if(using_point_light){
-                numLights = numLights + 1;
-                to_light = normalize(light.xyz - p_hit);
-                max_dist = length(light.xyz - p_hit)+1;
-                vec4 shadow_ray = vec4(to_light, 0.001);
-                int obj_in_way;
-                marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-                if (obj_in_way != -1){
-                // In shadow
-                    //in_shadows = in_shadows + 1;
-                    in_shadows[0] = true;
-                }
-
-            }
-            if (using_dir_light) {
-                numLights = numLights + 1;
-                to_light = -1.0 * dir_light;
-                max_dist = maxDistance;
-                vec4 shadow_ray = vec4(to_light, 0.001);
-                int obj_in_way;
-                marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-                if (obj_in_way != -1){
-                    // In shadow            
-                    in_shadows[1] = true;
-                    //in_shadows = in_shadows + 1;
-                    //dir_light_shadow = true;
-                }
-            }
-            if(numLights == 0) { f_color = vec4(0.0); return;}
-            //float shadow_fraction = in_shadows/numLights;
+            // I would really like to make a centralized "object" struct, but oh well ¯\_(ツ)_/¯
+            color += iterativeDepthMarchRay(ray, cam_pos, maxDistance);
             
-
-            if (object_hit == 0) {
-                // Sphere
-                color += vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
-                //return;
-            } else if (object_hit == 1){
-                // Plane
-                vec4 reflection_color = vec4(0);
-                if(plane.reflectiveness > 0){
-                    vec4 r = vec4(reflect(ray.xyz, obj_normal), 0.0001);
-                    reflection_color = reflectedRayMarchColor(r, p_hit + r.w*r.xyz);
-                }
-                color += plane.reflectiveness * reflection_color + 
-                        (1.0-plane.reflectiveness) * vec4(shade(ray, p_hit, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
-                // should change something around here to get into the sampler3D
-                // f_color = vec4(abs(texture(crate_sdf_texture, gl_FragCoord.xyz/height - 0.2)));//trunc((gl_FragCoord.xy - width/2)/width * crate_scale),0))));
-                //return;
-            } else if (object_hit == 2){
-                // Box
-                //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-                color += vec4(shade(ray, p_hit, obj_normal, box_color, box_shininess, in_shadows), 1.0);
-                return;
-            } else if (object_hit == 3 || object_hit == 4){
-                // Crate
-                //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-                // No lighting for now
-                in_shadows[0] = false;
-                in_shadows[1] = false;
-                VoxelSDFInfo currSDF = object_hit == 3 ? crateSDFInfo : linkSDFInfo;
-                color += vec4(shade(ray, p_hit, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
-                //f_color = vec4(0.8118, 0.1922, 0.1922, 1.0);
-                //return;
-            } else { 
-                // Error
-                f_color = vec4(0.9333, 0.0157, 0.0157, 1.0);
-                return;
-            }
-           f_color = color/pow(sample_frequency,2.0);
+            
 
         }
     }
+    f_color = color/pow(sample_frequency,2.0);
     
 
 }
 
-vec4 reflectedRayMarchColor(vec4 reflected_ray, vec3 reflection_origin){
-    int object_hit;
-    marchRay(object_hit, reflected_ray, reflection_origin, maxDistance);
-
-    if(object_hit == -1) {
-        // Hit nothing
-        return back_color; 
-    } 
-
-    vec3 p_hit = reflection_origin + reflected_ray.xyz*reflected_ray.w;
-    vec3 obj_normal = getNormal(p_hit, object_hit);
-    //f_color = vec4(obj_normal*vec3(2, 2, 3), 1); 
-    vec3 to_light;
-    float max_dist = maxDistance; 
-    float numLights = 0;
-    //float in_shadows = 0;
-    bool in_shadows[2];
-    in_shadows[0] = false;
-    in_shadows[1] = false;
-
-    if(using_point_light){
-        numLights = numLights + 1;
-        to_light = normalize(light.xyz - p_hit);
-        max_dist = length(light.xyz - p_hit);
-        vec4 shadow_ray = vec4(to_light, 0.001);
-        int obj_in_way;
-        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-        if (obj_in_way != -1){
-        // In shadow
-            in_shadows[0] = true;
-            //in_shadows = in_shadows + 1;
-        }
-
-    }
-    if (using_dir_light) {
-        numLights = numLights + 1;
-        to_light = -1.0 * dir_light;
-        max_dist = maxDistance;
-        vec4 shadow_ray = vec4(to_light, 0.001);
-        int obj_in_way;
-        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
-        if (obj_in_way != -1){
-        // In shadow
-            in_shadows[1] = true;
-            //in_shadows = in_shadows + 1;
-        }
-    }
-
-
-    //float reflected_shadow_fraction = in_shadows/numLights;
-    
-    if(in_shadows[0] && in_shadows[1]) {
-        return vec4(0);
-    }
-    if (object_hit == 0) {
-        // Sphere
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
-    } else if (object_hit == 1){
-        // Plane
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, plane.color, plane.shininess, in_shadows), 1.0);
-    } else if (object_hit == 2){
-        // Box
-        //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, box_color, box_shininess, in_shadows), 1.0);
-    } else if (object_hit == 3 || object_hit == 4){
-        // Crate
-        //f_color = vec4(abs(obj_normal), 1.0);return;//Debug
-        // No lighting for now
-        in_shadows[0] = false;
-        in_shadows[1] = false;
-        VoxelSDFInfo currSDF = object_hit == 3 ? crateSDFInfo : linkSDFInfo;
-
-        return vec4(shade(reflected_ray, reflection_origin, obj_normal, currSDF.color, currSDF.shininess, in_shadows), 1.0);
-
-    } else { 
-        // Error
-        return vec4(0.9333, 0.0157, 0.0157, 1.0);
-    }
-}
 
 void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_dist){
     
@@ -341,6 +204,97 @@ void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_d
     }
     return;
     
+    
+}
+
+vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
+    
+    // Exceeded depth max
+    /*if (curr_depth > max_depth ){
+        return back_color;
+    }*/
+
+    // This iterative structure from https://www.cs.uaf.edu/2012/spring/cs481/section/0/lecture/02_07_recursion_reflection.html
+    vec4 output_color = vec4(0);
+    float color_fraction = 1.0;
+    int i = 1;
+    for( i; i <= max_depth; i++) {
+
+        int object_hit = -1;
+        marchRay(object_hit, ray, ray_start, max_dist);
+        if(object_hit == -1) {
+            // Hit nothing; show background color
+            output_color += back_color; 
+            break; // Can't reflect....
+        } 
+
+        vec3 p_hit = ray_start + ray.xyz*ray.w;
+        vec3 obj_normal = getNormal(p_hit, object_hit);
+
+        int numLights = (using_dir_light?1:0) + (using_point_light?1:0);
+
+
+        // Shadows
+        if(numLights == 0) { return vec4(0.0);}
+        bool in_shadows[2] = {false, false};
+        check_shadows(p_hit, obj_normal, max_dist, in_shadows); // Just wanted to separate this part out, honestly;
+        
+        
+        // Shading
+        vec3 obj_color;
+        float obj_shininess;
+        float obj_reflectiveness = 0.0;
+
+        if (object_hit == 0) {
+            // Sphere
+            obj_color = sphere.color;
+            obj_shininess = sphere.shininess;
+            obj_reflectiveness = sphere.reflectiveness;
+
+            //output_color += color_fraction*vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
+            //return;
+        } else if (object_hit == 1){
+            // Plane
+            obj_color = plane.color;
+            obj_shininess = plane.shininess;
+            obj_reflectiveness = plane.reflectiveness;
+
+        } else if (object_hit == 2){
+            // Box
+            obj_color = box.color;
+            obj_shininess = box.shininess;
+            //obj_reflectiveness = box.reflectiveness;
+
+        } else if (object_hit == 3){
+            // Crate SDF
+            obj_color = crateSDFInfo.color;
+            obj_shininess = crateSDFInfo.shininess;
+            obj_reflectiveness = crateSDFInfo.reflectiveness;
+
+        } else if (object_hit == 4){
+            // Link SDF
+            obj_color = linkSDFInfo.color;
+            obj_shininess = linkSDFInfo.shininess;
+            obj_reflectiveness = linkSDFInfo.reflectiveness;
+
+        } else { 
+            // Error
+            return vec4(0.9333, 0.0157, 0.0157, 1.0);
+        }
+        output_color += color_fraction*vec4(shade(ray, p_hit, obj_normal, obj_color, obj_shininess, in_shadows), 1.0);
+        color_fraction *= obj_reflectiveness;
+
+        if (color_fraction < 0.05 ){ break; } // Not much effect left
+
+        // setup for reflected iteration
+        ray = vec4(reflect(ray.xyz, obj_normal), 0.001);
+        ray_start = p_hit;
+
+        // TODO: Transparency
+        // Shoot transmission rays here
+
+    }
+    return output_color / i;
 }
 
 
@@ -515,6 +469,39 @@ int findMinInArray(float distances[NUM_OBJECTS]){
         }
     }
     return min_idx;
+}
+
+void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out bool in_shadows[2]){
+    // Lighting
+    in_shadows[0] = false;
+    in_shadows[1] = false;
+    vec3 to_light;
+    
+
+    if(using_point_light){
+        to_light = normalize(light.xyz - p_hit);
+        max_dist = length(light.xyz - p_hit)+1;
+        vec4 shadow_ray = vec4(to_light, 0.001);
+        int obj_in_way;
+        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+        if (obj_in_way != -1){
+        // In shadow
+            in_shadows[0] = true;
+        }
+
+    }
+    if (using_dir_light) {
+        to_light = -1.0 * dir_light;
+        max_dist = maxDistance;
+        vec4 shadow_ray = vec4(to_light, 0.001);
+        int obj_in_way;
+        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+        if (obj_in_way != -1){
+            // In shadow            
+            in_shadows[1] = true;
+        }
+    }
+
 }
 
 // from https://stackoverflow.com/questions/4200224/random-noise-functions-for-glsl
