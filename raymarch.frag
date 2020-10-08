@@ -237,6 +237,12 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         // Shadows
         if(numLights == 0) { return vec4(0.0);}
         bool in_shadows[2] = {false, false};
+
+        // TODO: Change check_shadows to look at area light
+        /*        Loop over some number of rays (shoot at center of sphere light, jostled around randomly, kinda like above)
+        *           shadow = # miss / total shot;
+        *        Make in_shadows  into an array of floats....
+        */
         check_shadows(p_hit, obj_normal, max_dist, in_shadows); // Just wanted to separate this part out, honestly;
         
         
