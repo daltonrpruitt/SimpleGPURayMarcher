@@ -124,7 +124,7 @@ void marchRay(out int, inout vec4, in vec3, float);
 vec4 iterativeDepthMarchRay(inout vec4, in vec3, in float);
 
 vec3 getNormal(vec3, int);
-void check_shadows(in vec3, in vec3, in float, in out float[3]);
+void check_shadows(in vec3, in vec3, in out float[3]);
 
 
 mat4 rotationX(in float);
@@ -233,19 +233,19 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         vec3 p_hit = ray_start + ray.xyz*ray.w;
         vec3 obj_normal = getNormal(p_hit, object_hit);
 
-        int numLights = (using_dir_light?1:0) + (using_point_light?1:0);
+        int numLights = (using_dir_light?1:0) + (using_point_light?1:0) + (using_sphere_light?1:0);
 
 
         // Shadows
         if(numLights == 0) { return vec4(0.0);}
-        float lighting_fraction[3]; // TODO make a constant...
+        float lighting_fraction[3]; // TODO use a constant to size...
 
         // TODO: Change check_shadows to look at area light
         /*        Loop over some number of rays (shoot at center of sphere light, jostled around randomly, kinda like above)
         *           shadow = # miss / total shot;
         *        Make in_shadows  into an array of floats....
         */
-        check_shadows(p_hit, obj_normal, max_dist, lighting_fraction); // Just wanted to separate this part out, honestly;
+        check_shadows(p_hit, obj_normal, lighting_fraction); // Just wanted to separate this part out, honestly;
         
         
         // Shading
@@ -492,21 +492,21 @@ int findMinInArray(float distances[NUM_OBJECTS]){
     return min_idx;
 }
 
-void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out float lighting_fraction[3]){
+void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_fraction[3]){
     // Lighting
     lighting_fraction[0] = 1.;    
     lighting_fraction[1] = 1.;    
     lighting_fraction[2] = 1.;
 
     vec3 to_light;
-    
+    float dist_to_light;
 
     if(using_point_light){
         to_light = normalize(light.xyz - p_hit);
-        max_dist = length(light.xyz - p_hit)+1;
+        dist_to_light = length(light.xyz - p_hit)+1;
         vec4 shadow_ray = vec4(to_light, 0.001);
         int obj_in_way;
-        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, dist_to_light);
         if (obj_in_way != -1){
         // In shadow
             lighting_fraction[0] = 0.;
@@ -515,10 +515,10 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out 
     }
     if (using_dir_light) {
         to_light = -1.0 * dir_light;
-        max_dist = maxDistance;
+        dist_to_light = maxDistance;
         vec4 shadow_ray = vec4(to_light, 0.001);
         int obj_in_way;
-        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+        marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, dist_to_light);
         if (obj_in_way != -1){
             // In shadow            
             lighting_fraction[1] = 0.;
@@ -526,19 +526,37 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out 
     }
     if (using_sphere_light) {
         to_light = normalize(volLight.center.xyz - p_hit);
-        max_dist = length(volLight.center.xyz - p_hit)+1;
+        dist_to_light = length(volLight.center.xyz - p_hit)+1;
+
+        //vec3 perp_vec = 
+        // 1. Get ratio b/w radius and distance
+        float R_D = volLight.radius / dist_to_light; 
+        // 2. get two vectors orthogonal to to_light (assuming to_light is not straight down)
+        vec3 offV1 = cross(to_light, vec3(0.,0.,1.));
+        vec3 offV2 = cross(to_light, offV1);
+
+        // Use these vectors as offsets to the to_light vector with coefficients < R_D
+        //   to construct the shadow feeler rays (now we're thinking with portals!)
+        // This seems hacky to me, but eh, it'll have to do for now
+
         int num_shadow_feelers = 8;
         int num_hit = 0;
+        vec2 coefficients;
+        vec4 base_shadow_ray = vec4(to_light, 0.001);
+        vec4 shadow_ray;
+
         for(int i=0; i < num_shadow_feelers; i++) {
-            vec4 shadow_ray = vec4(to_light, 0.001);
+            coefficients = R_D * vec2(rand(p_hit.xy + vec2(0., i*191)), rand(p_hit.xy + vec2(i*131,0.))); // Random offset with prime offset within ¯\_(ツ)_/¯ Y not?
+            
+            shadow_ray = base_shadow_ray + vec4(offV1 * coefficients.x + offV2 * coefficients.y,0.);
             int obj_in_way;
-            marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+            marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, dist_to_light);
             if (obj_in_way != -1){
                 // In shadow            
                 num_hit++;
             }
         }
-        lighting_fraction[2] = 0.;//num_hit / num_shadow_feelers;
+        lighting_fraction[2] = 1 - num_hit / num_shadow_feelers;
 
     }
 }
