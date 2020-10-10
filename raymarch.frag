@@ -539,14 +539,41 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
         //   to construct the shadow feeler rays (now we're thinking with portals!)
         // This seems hacky to me, but eh, it'll have to do for now
 
-        int num_shadow_feelers = 8;
+        int grid_size = 4;
+        int sample_num = 20;
+        int loops = 4; 
+        float frequency = float(sample_num)/float(loops*2);
+        float PI = 3.14159265;
+        float t;
+
+        int num_shadow_feelers = 0;
         int num_hit = 0;
         vec2 coefficients;
         vec4 base_shadow_ray = vec4(to_light, 0.001);
         vec4 shadow_ray;
 
-        for(int i=0; i < num_shadow_feelers; i++) {
-            coefficients = R_D * vec2(rand(p_hit.xy + vec2(0., i*191)), rand(p_hit.xy + vec2(i*131,0.))); // Random offset with prime offset within ¯\_(ツ)_/¯ Y not?
+        /*for(int i=0; i < grid_size*grid_size; i++) {
+            float f_gs = float(grid_size);
+            float j = ( float(i % grid_size) - f_gs/2.) / (f_gs/2.) ;
+            float k = ( float(i / grid_size) - f_gs/2.) / (f_gs/2.) ;
+            */
+            //f_color = vec4(j, k, p_hit.z / 10, 1);return;
+        
+        for(int i=0; i < sample_num; i++) {
+            t =  float(i) / frequency * PI;
+            coefficients = vec2(cos(t), sin(t)) * (1. - float(i) / float(sample_num+5));
+
+/*
+
+            vec2 point_in_circle = vec2(j,k);
+
+            // outside of circle diameter = grid_size
+            if( length(point_in_circle) > 1.4142 ) {continue;} 
+            
+            // Is inside the circle
+            num_shadow_feelers++;
+            coefficients = R_D * point_in_circle; // Random offset with prime offset within ¯\_(ツ)_/¯ Y not?
+*/
             
             shadow_ray = base_shadow_ray + vec4(offV1 * coefficients.x + offV2 * coefficients.y,0.);
             int obj_in_way;
@@ -556,7 +583,10 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
                 num_hit++;
             }
         }
-        lighting_fraction[2] = 1 - num_hit / num_shadow_feelers;
+        float f_num_hit = float(num_hit);
+        float f_num_shadow_feelers = float(sample_num);
+
+        lighting_fraction[2] = 1 - f_num_hit / f_num_shadow_feelers;
 
     }
 }
