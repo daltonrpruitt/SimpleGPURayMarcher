@@ -45,8 +45,9 @@ class RayMarchingWindow(BasicWindow):
         self.show_box = False
         self.show_crate = False
         self.show_link = True
-
-
+        self.using_point_light = True
+        self.using_direction_light = False
+        self.using_sphere_light = False
 
 
 
@@ -55,7 +56,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
 
-        self.prog['sphere.center'].value = (1.0, 2.0, 5.0)
+        self.prog['sphere.center'].value = (1.0, 0.5, 1.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
@@ -80,13 +81,13 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0) #(1,1,1, 1)
 
-        self.prog['light'].value = (2., 2, 0., 1.)
+        self.prog['light'].value = (0., 2, 0., 1.)
         self.prog['light_color'].value = (1., 1., 1.)
 
         self.prog['cam_pos'].value = (0, 0, -5)
 
-        self.prog['using_point_light'].value = True
-        self.prog['using_dir_light'].value = False
+        self.prog['using_point_light'].value = self.using_point_light
+        self.prog['using_dir_light'].value = self.using_direction_light
 
         # Some debugging print statements
         '''for name in self.prog:
@@ -96,12 +97,12 @@ class RayMarchingWindow(BasicWindow):
             
         #self.prog['linkSDFInfo'].value = (1, (0, 1, 8), (0.,0.,0.), 1.0, (0.1, 0.5, 0.7),  4.0 )
         self.prog['linkSDFInfo.id'].value = 1
-        self.prog['linkSDFInfo.position'].value = (-1.5, 0.1, (5+5)*self.link_scale - 5)
+        self.prog['linkSDFInfo.position'].value = (-1.5, 0.1, (1+5)*self.link_scale - 5)
         self.prog['linkSDFInfo.rotation'].value = (0, -np.pi/2, 0.)
         self.prog['linkSDFInfo.scale'].value =  self.link_scale
         self.prog['linkSDFInfo.color'] =  (0.1, 0.5, 0.7)
         self.prog['linkSDFInfo.shininess'] =  16.0
-        self.prog['linkSDFInfo.reflectiveness'] =  0.6
+        self.prog['linkSDFInfo.reflectiveness'] =  0.9
         #linksdf.reflectiveness=  0.0
         '''for name in self.prog:
             member = self.prog[name]

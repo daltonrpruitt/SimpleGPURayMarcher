@@ -57,7 +57,7 @@ vec3 plane_norm = normalize(vec3(0., 1, -.0));
 float plane_dist = 1;
 vec3 plane_color = vec3(0.2431, 0.7451, 0.0431);
 float plane_shininess = 16.0;
-float plane_reflectiveness = 0.4;
+float plane_reflectiveness = 0.9;
 
 Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_reflectiveness);
 
@@ -91,6 +91,8 @@ bool point_light_shadow = false;
 
 uniform bool using_point_light;
 uniform bool using_dir_light;
+//uniform bool using_sphere_light;
+bool using_sphere_light = true;
 
 
 out vec4 f_color;
@@ -112,7 +114,7 @@ int numObjects = NUM_OBJECTS;
 int findMinInArray(float[NUM_OBJECTS]);
 
 float rand(vec2);
-vec3 shade(vec4, vec3, vec3, vec3, float, bool[2]);
+vec3 shade(vec4, vec3, vec3, vec3, float, float[3]);
 float sdfSphere(Sphere, vec4, vec3);
 float sdfPlane(Plane, vec3);
 float sdfBox(vec3, vec3, vec3, vec3);
@@ -122,7 +124,7 @@ void marchRay(out int, inout vec4, in vec3, float);
 vec4 iterativeDepthMarchRay(inout vec4, in vec3, in float);
 
 vec3 getNormal(vec3, int);
-void check_shadows(in vec3, in vec3, in float, in out bool[2]);
+void check_shadows(in vec3, in vec3, in float, in out float[3]);
 
 
 mat4 rotationX(in float);
@@ -236,14 +238,14 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
 
         // Shadows
         if(numLights == 0) { return vec4(0.0);}
-        bool in_shadows[2] = {false, false};
+        float lighting_fraction[3]; // TODO make a constant...
 
         // TODO: Change check_shadows to look at area light
         /*        Loop over some number of rays (shoot at center of sphere light, jostled around randomly, kinda like above)
         *           shadow = # miss / total shot;
         *        Make in_shadows  into an array of floats....
         */
-        check_shadows(p_hit, obj_normal, max_dist, in_shadows); // Just wanted to separate this part out, honestly;
+        check_shadows(p_hit, obj_normal, max_dist, lighting_fraction); // Just wanted to separate this part out, honestly;
         
         
         // Shading
@@ -287,7 +289,7 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
             // Error
             return vec4(0.9333, 0.0157, 0.0157, 1.0);
         }
-        output_color += color_fraction*vec4(shade(ray, p_hit, obj_normal, obj_color, obj_shininess, in_shadows), 1.0);
+        output_color += color_fraction*vec4(shade(ray, p_hit, obj_normal, obj_color, obj_shininess, lighting_fraction), 1.0);
         color_fraction *= obj_reflectiveness;
 
         if (color_fraction < 0.05 ){ break; } // Not much effect left
@@ -421,12 +423,11 @@ float sdfVoxelSDF(VoxelSDFInfo voxSDF, vec3 point) {
 }
 
 // Based on general structure of Dr. TJ Jankun-Kelly's Observable Notes: https://observablehq.com/@infowantstobeseen/basic-ray-marching
-vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, float obj_shininess, bool in_shadow[2]) {
+vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, float obj_shininess, float lighting_fraction[3]) {
     vec3 color = ambient_coeff * object_color;
 
-    if(using_point_light){
-
-        if (!in_shadow[0]){
+    // This if () { if () {    }} structure is due to the incompatibility of uniform bool and temp bool, apparently
+    if(using_point_light){ if ( lighting_fraction[0] > 0.) {
         vec3 vec_to_light = normalize(light.xyz - hit_point);
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
@@ -439,11 +440,9 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         vec3 specular_color =  light_color * pow(e_dot_r, obj_shininess);
-        color = color + diffuse_color + specular_color; //* (1-shadow_fraction);
-        }
-    }
-    if(using_dir_light) {
-        if(!in_shadow[1]){
+        color += diffuse_color + specular_color; //* (1-shadow_fraction);
+    }}
+    if(using_dir_light) { if (lighting_fraction[1] > 0.) { 
         vec3 vec_to_light = -dir_light;
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
@@ -457,9 +456,25 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         //return vec3(e_dot_r);
         vec3 specular_color = dir_light_color * pow(e_dot_r, obj_shininess);
-        color = color +  diffuse_color + specular_color ;//* (1-shadow_fraction); 
-        }
-    }
+        color += diffuse_color + specular_color ;//* (1-shadow_fraction); 
+    } }
+    if(using_sphere_light) { if (lighting_fraction[2] > 0) { 
+        vec3 vec_to_light = normalize(volLight.center.xyz - hit_point);
+        float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
+        
+        vec3 diffuse_color = volLight.color * lambertian * object_color;
+                                
+        // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
+        // Check if is actually reflecting the correct way
+        vec3 reflected_vec = reflect(-vec_to_light, normal);
+        //Above is effectively normalize(2.0 * dot(vec_to_light, norm) * norm - vec_to_light);
+        vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
+        float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
+        vec3 specular_color =  light_color * pow(e_dot_r, obj_shininess);
+        color += lighting_fraction[2]*(diffuse_color + specular_color); 
+    } }
+
+    // maybe divide by number of lights being used before clamping?
     return clamp(color , vec3(0.), vec3(1.));
 }
 
@@ -477,10 +492,12 @@ int findMinInArray(float distances[NUM_OBJECTS]){
     return min_idx;
 }
 
-void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out bool in_shadows[2]){
+void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out float lighting_fraction[3]){
     // Lighting
-    in_shadows[0] = false;
-    in_shadows[1] = false;
+    lighting_fraction[0] = 1.;    
+    lighting_fraction[1] = 1.;    
+    lighting_fraction[2] = 1.;
+
     vec3 to_light;
     
 
@@ -492,7 +509,7 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out 
         marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
         if (obj_in_way != -1){
         // In shadow
-            in_shadows[0] = true;
+            lighting_fraction[0] = 0.;
         }
 
     }
@@ -504,10 +521,26 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in float max_dist, in out 
         marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
         if (obj_in_way != -1){
             // In shadow            
-            in_shadows[1] = true;
+            lighting_fraction[1] = 0.;
         }
     }
+    if (using_sphere_light) {
+        to_light = normalize(volLight.center.xyz - p_hit);
+        max_dist = length(volLight.center.xyz - p_hit)+1;
+        int num_shadow_feelers = 8;
+        int num_hit = 0;
+        for(int i=0; i < num_shadow_feelers; i++) {
+            vec4 shadow_ray = vec4(to_light, 0.001);
+            int obj_in_way;
+            marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, max_dist);
+            if (obj_in_way != -1){
+                // In shadow            
+                num_hit++;
+            }
+        }
+        lighting_fraction[2] = 0.;//num_hit / num_shadow_feelers;
 
+    }
 }
 
 // from https://stackoverflow.com/questions/4200224/random-noise-functions-for-glsl
