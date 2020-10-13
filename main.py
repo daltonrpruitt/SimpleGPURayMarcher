@@ -39,31 +39,35 @@ class RayMarchingWindow(BasicWindow):
             fragment_shader=open("raymarch.frag", "r").read(),
 
         )
-
+        
         self.animate = False
         self.show_sphere = True
-        self.show_box = False
+        self.show_box = True
         self.show_crate = False
-        self.show_link = True
+        self.show_link = False
         self.using_point_light = False
         self.using_direction_light = False
-        self.using_sphere_light = False
+        self.using_sphere_light = True
 
-
+        self.antialiasing_sample_frequency = 1
 
 
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
 
-        self.prog['sphere.center'].value = (1.0, 0.5, 1.0)
+        self.prog['antialiasing_sample_frequency'].value = self.antialiasing_sample_frequency
+
+
+
+        self.prog['sphere.center'].value = (1.0, 0.5, 2.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
-        self.prog['sphere.reflectiveness'].value = 0.6
+        self.prog['sphere.reflectiveness'].value = 0.4
 
-        self.prog['box_center'].value = (-1, 0, 8)
-        self.prog['box_rotation'].value = (0, 0, 0) # Degrees
+        self.prog['box_center'].value = (-1.5, 0, 3)
+        self.prog['box_rotation'].value = (0, np.pi/4, 0) # Degrees
         
         # Crate SDF
         crate_res = 512
@@ -84,10 +88,17 @@ class RayMarchingWindow(BasicWindow):
         self.prog['light'].value = (0., 2, 0., 1.)
         self.prog['light_color'].value = (1., 1., 1.)
 
+
+        self.prog['volLight.center'].value = (1.5, 5., 0.)
+        self.prog['volLight.radius'].value = 2.
+        self.prog['volLight.color'].value = (1.0, 1.0, 1.0)
+        #self.prog['volLight.intensity'].value = 1.0
+
         self.prog['cam_pos'].value = (0, 0, -5)
 
         self.prog['using_point_light'].value = self.using_point_light
         self.prog['using_dir_light'].value = self.using_direction_light
+        self.prog['using_sphere_light'].value = self.using_sphere_light
 
         # Some debugging print statements
         '''for name in self.prog:
@@ -258,3 +269,5 @@ class RayMarchingWindow(BasicWindow):
 
 if __name__ == '__main__':
     RayMarchingWindow.run()
+    #wind = RayMarchingWindow()
+    #wind.render()
