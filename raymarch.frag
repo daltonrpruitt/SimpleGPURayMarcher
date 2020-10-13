@@ -21,7 +21,11 @@ struct SphereLight {
     float intensity;
 };
 
-SphereLight volLight = SphereLight(vec3(0, 3, 5), 1, vec3(1), 1);
+// SphereLight volLight = SphereLight(vec3(1, 5, 2), 2., vec3(1), 1);
+uniform SphereLight volLight;
+
+
+
 
 struct Plane {
     vec3 normal;
@@ -91,8 +95,7 @@ bool point_light_shadow = false;
 
 uniform bool using_point_light;
 uniform bool using_dir_light;
-//uniform bool using_sphere_light;
-bool using_sphere_light = true;
+uniform bool using_sphere_light;
 
 
 out vec4 f_color;
@@ -101,6 +104,7 @@ out vec4 f_color;
 int march_iterations = 1024;
 int max_depth = 5;
 uniform vec3 cam_pos; // = vec3(0.0, 0.0, -10.0);
+uniform int antialiasing_sample_frequency;
 float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
 vec3 dir_light = normalize(vec3(1, -1, 1));
@@ -145,14 +149,15 @@ void main() {
     vec4 color = vec4(0,0,0,0);
     
     // From page 310 of Shirley and Marschner
-    int sample_frequency = 1; // 
+    int sample_frequency = antialiasing_sample_frequency; // 
     for(int p = 0; p < sample_frequency; p++) {  
         for(int q = 0; q < sample_frequency; q++) {  
-        
+            float f_samp_freq = float(sample_frequency);
             // Make rays offset uniform amounts from center (pg 310)
-            vec2 sub_region = vec2((p+0.5)/sample_frequency - 0.5, (q+0.5)/sample_frequency - 0.5);
-            float random_shift = rand(vec2(gl_FragCoord.xy + sub_region));
-            vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/sample_frequency;
+            vec2 sub_region = vec2((p+0.5)/f_samp_freq - 0.5, (q+0.5)/f_samp_freq - 0.5);
+            vec2 random_shift = vec2(rand(gl_FragCoord.xy + 2*sub_region),rand(vec2(gl_FragCoord.xy + sub_region)))/f_samp_freq;
+             
+            vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/f_samp_freq;
             
             vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 0.001);
             
@@ -539,52 +544,94 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
         //   to construct the shadow feeler rays (now we're thinking with portals!)
         // This seems hacky to me, but eh, it'll have to do for now
 
-        int grid_size = 4;
-        int sample_num = 20;
-        int loops = 4; 
-        float frequency = float(sample_num)/float(loops*2);
-        float PI = 3.14159265;
-        float t;
-
+        int grid_size = 8;
+        float f_gs = float(grid_size);
         int num_shadow_feelers = 0;
         int num_hit = 0;
         vec2 coefficients;
         vec4 base_shadow_ray = vec4(to_light, 0.001);
         vec4 shadow_ray;
 
-        /*for(int i=0; i < grid_size*grid_size; i++) {
-            float f_gs = float(grid_size);
-            float j = ( float(i % grid_size) - f_gs/2.) / (f_gs/2.) ;
-            float k = ( float(i / grid_size) - f_gs/2.) / (f_gs/2.) ;
-            */
-            //f_color = vec4(j, k, p_hit.z / 10, 1);return;
-        
-        for(int i=0; i < sample_num; i++) {
-            t =  float(i) / frequency * PI;
-            coefficients = vec2(cos(t), sin(t)) * (1. - float(i) / float(sample_num+5));
 
-/*
+        for(int i=0; i < grid_size; i++) {
+            for (int j=0; j < grid_size; j++) {
+                if( i % grid_size == 0 || i % grid_size == grid_size-1 || 
+                    j % grid_size == 0 || j % grid_size == grid_size-1   ) { // Only perimeter
 
-            vec2 point_in_circle = vec2(j,k);
+                    // Test inside
+                    float fi = float(i);
+                    float fj = float(j);
+                    vec2 sub_region = vec2((fi+0.5) , (fj+0.5))/f_gs;
+                    sub_region += vec2(rand(p_hit.xy * sub_region), rand(p_hit.yx * sub_region))/(2.*f_gs);
 
-            // outside of circle diameter = grid_size
-            if( length(point_in_circle) > 1.4142 ) {continue;} 
-            
-            // Is inside the circle
-            num_shadow_feelers++;
-            coefficients = R_D * point_in_circle; // Random offset with prime offset within ¯\_(ツ)_/¯ Y not?
-*/
-            
-            shadow_ray = base_shadow_ray + vec4(offV1 * coefficients.x + offV2 * coefficients.y,0.);
-            int obj_in_way;
-            marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, dist_to_light);
-            if (obj_in_way != -1){
-                // In shadow            
-                num_hit++;
+
+                    //f_color = vec4(j, k, p_hit.z / 10, 1);return;
+                    //float rand1 = rand(p_hit.yz*p_hit.zx + vec2(fi,fj));
+                    //float rand2 = rand(p_hit.zx*p_hit.yx + vec2(fi,fj));
+                    // From https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-17-efficient-soft-edged-shadows-using
+                    float sqrt_y = sqrt(sub_region.y);
+                    float _2pix = 2. * 3.14159256 * sub_region.x;
+                    vec2 point_in_circle = vec2(sqrt_y * cos(_2pix), sqrt_y * sin(_2pix))*2. - vec2(1.); //vec2(j,k) / (f_gs/2.) - vec2(0.5);
+
+                    // outside of circle diameter = grid_size
+                    //if( length(point_in_circle) > 1.414213562 ) {f_color = vec4(0.9412, 0.0235, 0.0235, 0.0);return; } 
+                    
+                    // Is inside the circle
+                    num_shadow_feelers++;
+                    coefficients = R_D * point_in_circle; // Random offset with prime offset within ¯\_(ツ)_/¯ Y not?
+                    
+                    shadow_ray = base_shadow_ray + vec4(offV1 * coefficients.x + offV2 * coefficients.y,base_shadow_ray.w);
+                    int obj_in_way;
+                    marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, dist_to_light);
+                    if (obj_in_way != -1){
+                        // In shadow            
+                        num_hit++;
+                    }
+                }
+            }
+        }
+        // Exit early if all of perimeter hits or doesn't
+        if (num_hit == 0 ){lighting_fraction[2] = 1.0;  return;}
+        if (num_hit == num_shadow_feelers ){lighting_fraction[2] = 0.0; return;}
+
+
+        for(int i=1; i < grid_size-1; i++) {
+            for (int j=1; j < grid_size-1; j++) {
+                float f_gs = float(grid_size);
+                float fi = float(i);
+                float fj = float(j);
+                vec2 sub_region = vec2((fi+0.5) , (fj+0.5))/f_gs;
+                sub_region += vec2(rand(p_hit.xy * sub_region), rand(p_hit.yx * sub_region))/(2.*f_gs);
+                //float rand1 = rand(p_hit.xy + sub_region);
+                //float rand2 = rand(p_hit.yz + sub_region);
+
+
+                //f_color = vec4(j, k, p_hit.z / 10, 1);return;
+                //float rand1 = rand(p_hit.yz*p_hit.zx + vec2(fi,fj));
+                //float rand2 = rand(p_hit.zx*p_hit.yx + vec2(fi,fj));
+                // From https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-17-efficient-soft-edged-shadows-using
+                float sqrt_y = sqrt(sub_region.y);
+                float _2pix = 2. * 3.14159256 * sub_region.x;
+                vec2 point_in_circle = vec2(sqrt_y * cos(_2pix), sqrt_y * sin(_2pix))*2. - vec2(1.); //vec2(j,k) / (f_gs/2.) - vec2(0.5);
+
+                // outside of circle diameter = grid_size
+                //if( length(point_in_circle) > 1.414213562 ) {f_color = vec4(0.9412, 0.0235, 0.0235, 0.0);return; } 
+                
+                // Is inside the circle
+                num_shadow_feelers++;
+                coefficients = R_D * point_in_circle; // Random offset with prime offset within ¯\_(ツ)_/¯ Y not?
+                
+                shadow_ray = base_shadow_ray + vec4(offV1 * coefficients.x + offV2 * coefficients.y,0.);
+                int obj_in_way;
+                marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, dist_to_light);
+                if (obj_in_way != -1){
+                    // In shadow            
+                    num_hit++;
+                }
             }
         }
         float f_num_hit = float(num_hit);
-        float f_num_shadow_feelers = float(sample_num);
+        float f_num_shadow_feelers = float(num_shadow_feelers);
 
         lighting_fraction[2] = 1 - f_num_hit / f_num_shadow_feelers;
 
