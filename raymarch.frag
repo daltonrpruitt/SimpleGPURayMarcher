@@ -1,5 +1,13 @@
 #version 430
 
+struct MaterialProperties {
+    vec3 color;
+    float shininess;
+    float reflectiveness;
+    bool is_transparent;
+};
+
+
 struct Sphere {
     vec3 center;
     float radius;
@@ -70,6 +78,7 @@ uniform vec3 box_center; // = vec3(-2,  0., 8.);
 vec3 box_dimensions = vec3(1);
 vec3 box_color = vec3(0.9686, 0.9843, 0.0118);
 float box_shininess = 32.0;
+float box_reflectiveness = 0.0;
 uniform vec3 box_rotation;
 
 struct Box {
@@ -77,10 +86,11 @@ struct Box {
     vec3 dimensions;
     vec3 color;
     float shininess;
+    float reflectiveness;
 
 };
 
-Box box = Box(box_center, box_dimensions, box_color, box_shininess);
+Box box = Box(box_center, box_dimensions, box_color, box_shininess, box_reflectiveness);
 
 uniform float width;
 uniform float height;
@@ -119,16 +129,18 @@ int findMinInArray(float[NUM_OBJECTS]);
 
 float rand(vec2);
 vec3 shade(vec4, vec3, vec3, vec3, float, float[3]);
-float sdfSphere(Sphere, vec4, vec3);
+float sdfSphere(Sphere, vec3);
 float sdfPlane(Plane, vec3);
 float sdfBox(vec3, vec3, vec3, vec3);
 float sdfVoxelSDF(VoxelSDFInfo, vec3);
 
-void marchRay(out int, inout vec4, in vec3, float);
+void marchRay(out int, inout vec4, in vec3, float, bool);
 vec4 iterativeDepthMarchRay(inout vec4, in vec3, in float);
+vec4 refractOnObject(vec4, vec3, vec3, int);
 
 vec3 getNormal(vec3, int);
 void check_shadows(in vec3, in vec3, in out float[3]);
+MaterialProperties getMaterialProperties(int obj_hit);
 
 
 mat4 rotationX(in float);
@@ -181,7 +193,7 @@ void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_d
         // TODO: Loop over objects
         float signed_dist = max_dist;
 
-        float sphere_signed_dist = sdfSphere(sphere, ray, ray_start);
+        float sphere_signed_dist = sdfSphere(sphere, ray.xyz * ray.w + ray_start);
         float plane_signed_dist = sdfPlane(plane, ray.xyz * ray.w + ray_start);
         float box_signed_dist = sdfBox(box_dimensions, box_center, box_rotation, ray.xyz * ray.w + ray_start);
         float crate_signed_dist = sdfVoxelSDF(crateSDFInfo , ray.xyz * ray.w + ray_start);
@@ -214,6 +226,55 @@ void marchRay(out int object_hit, inout vec4 ray, in vec3 ray_start, float max_d
     
 }
 
+void marchRefractedRay(int object_inside, inout vec4 refracted_ray, in vec3 ray_start){
+    
+    for(int i = 0; i < march_iterations; i++) {
+        float sdf = -1.0e3;
+        float max_dist = 0;
+        if(object_inside == 0 ) {
+            max_dist = 2 * sphere.radius + 0.5;
+            sdf = sdfSphere(sphere, refracted_ray.xyz * refracted_ray.w + ray_start);
+        }else {
+            refracted_ray.w = -1.0;
+            return;
+        }
+
+        if(sdf > -0.0001){
+            return;
+        } else if(refracted_ray.w > max_dist){
+            // Does not exit sphere?
+            refracted_ray.w = -1;
+            return;
+        } else { 
+            refracted_ray.w += -sdf;
+        }
+
+
+        /*
+        float plane_signed_dist = sdfPlane(plane, ray.xyz * ray.w + ray_start);
+        float box_signed_dist = sdfBox(box_dimensions, box_center, box_rotation, ray.xyz * ray.w + ray_start);
+        float crate_signed_dist = sdfVoxelSDF(crateSDFInfo , ray.xyz * ray.w + ray_start);
+        float link_signed_dist = sdfVoxelSDF(linkSDFInfo , ray.xyz * ray.w + ray_start);
+        */
+
+    }
+    refracted_ray.w = -1;
+    return;
+    
+    
+}
+
+// Page 305 of Shirley and Marschner
+float calcFresnelSchlickApproximation(vec3 incident, vec3 normal, float eta1, float eta2){
+    //return 0.0;
+    float cos_between = dot(-incident, normal);
+    float R0 = pow( ( eta1 - 1)/(eta2 + 1), 2.0);
+    return R0 + (1-R0) * pow((1- cos_between), 5.0);
+
+}
+
+
+
 vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
     
     // Exceeded depth max
@@ -245,59 +306,31 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         if(numLights == 0) { return vec4(0.0);}
         float lighting_fraction[3]; // TODO use a constant to size...
 
-        // TODO: Change check_shadows to look at area light
-        /*        Loop over some number of rays (shoot at center of sphere light, jostled around randomly, kinda like above)
-        *           shadow = # miss / total shot;
-        *        Make in_shadows  into an array of floats....
-        */
         check_shadows(p_hit, obj_normal, lighting_fraction); // Just wanted to separate this part out, honestly;
         
         
         // Shading
-        vec3 obj_color;
-        float obj_shininess;
-        float obj_reflectiveness = 0.0;
+        MaterialProperties mat_props = getMaterialProperties(object_hit);
+        
+        //vec4 refracted_color = vec4(0.);
 
-        if (object_hit == 0) {
-            // Sphere
-            obj_color = sphere.color;
-            obj_shininess = sphere.shininess;
-            obj_reflectiveness = sphere.reflectiveness;
-
-            //output_color += color_fraction*vec4(shade(ray, p_hit, obj_normal, sphere.color, sphere.shininess, in_shadows), 1.0);
-            //return;
-        } else if (object_hit == 1){
-            // Plane
-            obj_color = plane.color;
-            obj_shininess = plane.shininess;
-            obj_reflectiveness = plane.reflectiveness;
-
-        } else if (object_hit == 2){
-            // Box
-            obj_color = box.color;
-            obj_shininess = box.shininess;
-            //obj_reflectiveness = box.reflectiveness;
-
-        } else if (object_hit == 3){
-            // Crate SDF
-            obj_color = crateSDFInfo.color;
-            obj_shininess = crateSDFInfo.shininess;
-            obj_reflectiveness = crateSDFInfo.reflectiveness;
-
-        } else if (object_hit == 4){
-            // Link SDF
-            obj_color = linkSDFInfo.color;
-            obj_shininess = linkSDFInfo.shininess;
-            obj_reflectiveness = linkSDFInfo.reflectiveness;
-
-        } else { 
-            // Error
-            return vec4(0.9333, 0.0157, 0.0157, 1.0);
+        float reflectance = 1.0;
+        
+        if(mat_props.is_transparent) {
+            reflectance =  calcFresnelSchlickApproximation(ray.xyz, obj_normal, 1.003, 1.5);
+            vec4 refracted_color = refractOnObject(ray, p_hit, obj_normal, object_hit );
+            output_color += color_fraction * (1-reflectance) * refracted_color;
         }
-        output_color += color_fraction*vec4(shade(ray, p_hit, obj_normal, obj_color, obj_shininess, lighting_fraction), 1.0);
-        color_fraction *= obj_reflectiveness;
+
+
+        output_color += reflectance * color_fraction * vec4(shade(ray, p_hit, obj_normal, mat_props.color, mat_props.shininess, lighting_fraction), 1.0);
+        color_fraction *= mat_props.reflectiveness;
+
+        // Multiply by Fresnel, as well..?
+        //
 
         if (color_fraction < 0.05 ){ break; } // Not much effect left
+
 
         // setup for reflected iteration
         ray = vec4(reflect(ray.xyz, obj_normal), 0.001);
@@ -308,6 +341,62 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
 
     }
     return output_color / i;
+}
+
+
+vec4 refractOnObject(vec4 ray, vec3 ray_start, vec3 obj_normal, int object_inside){
+    float eta = 0.66;
+
+    float head_start = 0.01;
+    vec4 refracted_ray = vec4(refract(ray.xyz, obj_normal, eta), head_start);
+
+
+    marchRefractedRay(object_inside, refracted_ray, ray_start + -1.*head_start*obj_normal);
+    if( refracted_ray.w + 1 < 0.001) {return vec4(0.9686, 0.0196, 1.0, 1.0);}
+
+    vec3 new_ray_start = vec3(ray_start + refracted_ray.xyz*refracted_ray.w);
+    vec3 new_normal = getNormal(new_ray_start, object_inside);
+    vec4 new_ray = vec4(refract(ray.xyz, new_normal, 1.0/eta), head_start);
+    new_ray.xyz = -new_ray.xyz; // Will be facing wrong way...? Maybe
+
+    int obj_in_refraction;
+    marchRay(obj_in_refraction, new_ray, new_ray_start, maxDistance);
+    
+    if(obj_in_refraction < 0) {return back_color;} //Hit background
+    vec3 new_p_hit = new_ray_start + new_ray.xyz * new_ray.w;
+    vec3 lighting_normal = getNormal(new_p_hit, obj_in_refraction);
+
+    int numLights = (using_dir_light?1:0) + (using_point_light?1:0) + (using_sphere_light?1:0);
+
+    // Shadows
+    float lighting_fraction[3]; // TODO use a constant to size...
+    check_shadows(new_p_hit, lighting_normal, lighting_fraction); 
+
+    MaterialProperties mat_props = getMaterialProperties(obj_in_refraction);
+
+    return vec4(shade(new_ray, new_p_hit, lighting_normal, mat_props.color, mat_props.shininess, lighting_fraction), 1.0);
+}
+
+
+MaterialProperties getMaterialProperties(int obj_hit) {
+
+        if (obj_hit == 0) {
+            // Sphere
+            return MaterialProperties(sphere.color, sphere.shininess, sphere.reflectiveness, true);
+        } else if (obj_hit == 1){
+            return MaterialProperties(plane.color, plane.shininess, plane.reflectiveness, false);
+        } else if (obj_hit == 2){
+            return MaterialProperties(box.color, box.shininess, box.reflectiveness, false);
+        } else if (obj_hit == 3){
+            return MaterialProperties(crateSDFInfo.color, crateSDFInfo.shininess, crateSDFInfo.reflectiveness, false);
+
+        } else if (obj_hit == 4){
+            return MaterialProperties(linkSDFInfo.color, linkSDFInfo.shininess, linkSDFInfo.reflectiveness, false);
+        } else { 
+            // Error
+            return MaterialProperties(vec3(-1.), -1., -1., false);
+        }
+
 }
 
 
@@ -382,8 +471,8 @@ float sdfPlane(Plane plane, vec3 point){
         return maxDistance;
     }
 }
-float sdfSphere(Sphere sph, vec4 ray, vec3 ray_start){
-    return length(ray.xyz * ray.w + ray_start - sph.center) - sph.radius;
+float sdfSphere(Sphere sph, vec3 point){
+    return length(point - sph.center) - sph.radius;
 }
 
 // Based on https://iquilezles.org/www/articles/distfunctions/distfunctions.htm

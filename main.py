@@ -45,9 +45,9 @@ class RayMarchingWindow(BasicWindow):
         self.show_box = True
         self.show_crate = False
         self.show_link = False
-        self.using_point_light = False
+        self.using_point_light = True
         self.using_direction_light = False
-        self.using_sphere_light = True
+        self.using_sphere_light = False
 
         self.antialiasing_sample_frequency = 1
 
