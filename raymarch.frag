@@ -277,13 +277,8 @@ float calcFresnelSchlickApproximation(vec3 incident, vec3 normal, float eta1, fl
 
 vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
     
-    // Exceeded depth max
-    /*if (curr_depth > max_depth ){
-        return back_color;
-    }*/
-
     // This iterative structure from https://www.cs.uaf.edu/2012/spring/cs481/section/0/lecture/02_07_recursion_reflection.html
-    vec4 output_color = vec4(0);
+    vec4 output_color = vec4(0);    
     float color_fraction = 1.0;
     int i = 1;
     for( i; i <= max_depth; i++) {
@@ -318,10 +313,15 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         
         if(mat_props.is_transparent) {
             reflectance =  calcFresnelSchlickApproximation(ray.xyz, obj_normal, 1.003, 1.5);
-            vec4 refracted_color = refractOnObject(ray, p_hit, obj_normal, object_hit );
-            output_color += color_fraction * (1-reflectance) * refracted_color;
+            
+            if( reflectance < 0.99 ) {
+                vec4 refracted_color = refractOnObject(ray, p_hit, obj_normal, object_hit );
+                if(length(refracted_color - vec4(-1.)) < 0.01) { return vec4(0.8941, 0.9922, 0.0, 1.0);}//Error
+                output_color += color_fraction * (1-reflectance) * refracted_color;
+            } else {
+                reflectance = 1.0;
+            }
         }
-
 
         output_color += reflectance * color_fraction * vec4(shade(ray, p_hit, obj_normal, mat_props.color, mat_props.shininess, lighting_fraction), 1.0);
         color_fraction *= mat_props.reflectiveness;
@@ -345,19 +345,20 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
 
 
 vec4 refractOnObject(vec4 ray, vec3 ray_start, vec3 obj_normal, int object_inside){
-    float eta = 0.66;
+    float eta = 1.003/1.5;
 
     float head_start = 0.01;
     vec4 refracted_ray = vec4(refract(ray.xyz, obj_normal, eta), head_start);
+    if(refracted_ray.z < 0) {discard;}
 
+    marchRefractedRay(object_inside, refracted_ray, ray_start);
+    if( refracted_ray.w < 0) {return vec4(-1);}
+    if(length(refracted_ray.xyz) < 0.01) { return vec4(-1.); }
 
-    marchRefractedRay(object_inside, refracted_ray, ray_start + -1.*head_start*obj_normal);
-    if( refracted_ray.w + 1 < 0.001) {return vec4(0.9686, 0.0196, 1.0, 1.0);}
-
-    vec3 new_ray_start = vec3(ray_start + refracted_ray.xyz*refracted_ray.w);
+    vec3 new_ray_start = ray_start + refracted_ray.xyz*refracted_ray.w;
     vec3 new_normal = getNormal(new_ray_start, object_inside);
-    vec4 new_ray = vec4(refract(ray.xyz, new_normal, 1.0/eta), head_start);
-    new_ray.xyz = -new_ray.xyz; // Will be facing wrong way...? Maybe
+    vec4 new_ray = vec4(refract(ray.xyz, -new_normal, 1.0/eta), head_start);
+    //new_ray.xyz = -new_ray.xyz; // Will be facing wrong way...? Maybe
 
     int obj_in_refraction;
     marchRay(obj_in_refraction, new_ray, new_ray_start, maxDistance);
