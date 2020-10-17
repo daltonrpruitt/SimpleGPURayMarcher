@@ -42,31 +42,58 @@ class RayMarchingWindow(BasicWindow):
         
         self.animate = False
         self.show_sphere = True
-        self.show_box = True
+        self.show_box = False
         self.show_crate = False
-        self.show_link = False
+        self.show_link = True
         self.using_point_light = True
         self.using_direction_light = False
         self.using_sphere_light = False
 
-        self.antialiasing_sample_frequency = 1
+        self.antialiasing_sample_frequency = 2
+        self.use_depth_of_field = False
 
+        self.prog['u_gloss_blur_coeff'].value = 0.3
 
+        self.lens_parameters = ['u_focal_distance', 'u_lens_distance','u_lens_radius']
+        self.current_lens_paramter = self.lens_parameters[0]
+        self.prog['u_focal_distance'].value = 5
+        self.prog['u_lens_distance'].value = 1
+        self.prog['u_lens_radius'].value = 1
+
+        
+        
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
         # self.prog['time'].value = 0
 
         self.prog['antialiasing_sample_frequency'].value = self.antialiasing_sample_frequency
+        self.prog['max_recursive_depth'].value = 5
+        self.prog['use_depth_of_field'].value = self.use_depth_of_field
 
-
-
-        self.prog['sphere.center'].value = (1.0, 0.5, 2.0)
+        self.prog['sphere.center'].value = (0.0, 0, 7.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
         self.prog['sphere.reflectiveness'].value = 0.4
+        self.prog['sphere.is_transparent'].value = False
+        self.prog['sphere.glossiness'].value = 0.0
 
-        self.prog['box_center'].value = (-1.5, 0, 3)
+        plane_norm = np.array((0, 1,0))
+        plane_norm = plane_norm / np.sqrt(plane_norm[0]**2+plane_norm[1]**2+plane_norm[2]**2)
+        print(plane_norm)
+        self.prog['plane.normal'].value = tuple(plane_norm)
+        self.prog['plane.distance'].value = 1
+        self.prog['plane.color'].value = (0.2431, 0.7451, 0.0431)
+        self.prog['plane.shininess'].value = 16.0
+        self.prog['plane.reflectiveness'].value = 0.5
+        #self.prog['plane.is_transparent'].value = False
+        self.prog['plane.glossiness'].value = 0.6
+
+
+
+
+
+        self.prog['box_center'].value = (-2, 0, 2.5)
         self.prog['box_rotation'].value = (0, np.pi/4, 0) # Degrees
         
         # Crate SDF
@@ -108,7 +135,7 @@ class RayMarchingWindow(BasicWindow):
             
         #self.prog['linkSDFInfo'].value = (1, (0, 1, 8), (0.,0.,0.), 1.0, (0.1, 0.5, 0.7),  4.0 )
         self.prog['linkSDFInfo.id'].value = 1
-        self.prog['linkSDFInfo.position'].value = (-1.5, 0.1, (1+5)*self.link_scale - 5)
+        self.prog['linkSDFInfo.position'].value = (0.0, 0.0, 20.0) #(-1.5, 0.1, (1+5)*self.link_scale - 5)
         self.prog['linkSDFInfo.rotation'].value = (0, -np.pi/2, 0.)
         self.prog['linkSDFInfo.scale'].value =  self.link_scale
         self.prog['linkSDFInfo.color'] =  (0.1, 0.5, 0.7)
@@ -242,16 +269,56 @@ class RayMarchingWindow(BasicWindow):
             idx_buffer
         )
 
+    def key_event(self, key, action, modifiers):
+    
+        # Key presses
+        if action == self.wnd.keys.ACTION_PRESS:
+            if key == self.wnd.keys.NUMBER_1:
+                self.current_lens_paramter = self.lens_parameters[0]
+                print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
 
+            if key == self.wnd.keys.NUMBER_2:
+                self.current_lens_paramter = self.lens_parameters[1]
+                print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
+
+            if key == self.wnd.keys.NUMBER_3:
+                self.current_lens_paramter = self.lens_parameters[2]
+                print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
+
+            if key == self.wnd.keys.EQUAL:
+                self.prog[self.current_lens_paramter].value += 0.1
+                print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
+            if key == self.wnd.keys.MINUS:
+                self.prog[self.current_lens_paramter].value -= 0.1
+                print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
+
+            if key == self.wnd.keys.SPACE:
+                self.prog['use_depth_of_field'].value = not self.prog['use_depth_of_field'].value
+           
+            if key == self.wnd.keys.T:
+                self.prog['sphere.is_transparent'].value = not self.prog['sphere.is_transparent'].value
+
+            # Using modifiers (shift and ctrl)
+
+            if key == self.wnd.keys.Z and modifiers.shift:
+                print("Shift + Z was pressed")
+
+            if key == self.wnd.keys.Z and modifiers.ctrl:
+                print("ctrl + Z was pressed")
+
+        # Key releases
+        elif action == self.wnd.keys.ACTION_RELEASE:
+            pass
+        
     def render(self, time, frame_time):
         bc = self.prog['back_color'].value
         self.ctx.clear(bc[0], bc[1], bc[2], bc[3],)
         # Reset these uniforms here to resize the scene before rendering again
         self.prog['width'].value = self.wnd.width
         self.prog['height'].value = self.wnd.height
-        
+
         #self.prog['crate_rotation'].value = (np.pi/4, time, np.pi/4)
-        #self.prog['linkSDFInfo.rotation'] =  (np.pi/12, -time, np.pi/12)
+        self.prog['linkSDFInfo.position'] =  ( np.cos(time/2)*4, 0, 40 ) 
         
         self.vao.render()
 

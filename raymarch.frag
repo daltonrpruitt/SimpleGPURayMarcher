@@ -5,6 +5,7 @@ struct MaterialProperties {
     float shininess;
     float reflectiveness;
     bool is_transparent;
+    float glossiness;
 };
 
 
@@ -14,6 +15,8 @@ struct Sphere {
     vec3 color;
     float shininess;
     float reflectiveness;
+    bool is_transparent;
+    float glossiness;
 };
 
 struct Light {
@@ -41,6 +44,7 @@ struct Plane {
     vec3 color;
     float shininess;
     float reflectiveness;
+    float glossiness;
 };
 
 struct VoxelSDFInfo {
@@ -64,14 +68,19 @@ uniform VoxelSDFInfo linkSDFInfo;
 layout(binding = 1) uniform sampler3D link_sdf_texture;
 vec3 temp_color = linkSDFInfo.color;
 
+/*
 //Plane information
 vec3 plane_norm = normalize(vec3(0., 1, -.0));
 float plane_dist = 1;
 vec3 plane_color = vec3(0.2431, 0.7451, 0.0431);
 float plane_shininess = 16.0;
 float plane_reflectiveness = 0.9;
+float plane_glossiness = 0.5;
+*/
 
-Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_reflectiveness);
+//Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_reflectiveness, plane_glossiness);
+uniform Plane plane;
+//plane.normal = normalize(plane.normal);
 
 // Box Info
 uniform vec3 box_center; // = vec3(-2,  0., 8.);
@@ -112,16 +121,33 @@ out vec4 f_color;
 
 
 int march_iterations = 1024;
-int max_depth = 5;
+uniform int max_recursive_depth;
 uniform vec3 cam_pos; // = vec3(0.0, 0.0, -10.0);
 uniform int antialiasing_sample_frequency;
+uniform bool use_depth_of_field;
+uniform float u_focal_distance;
+uniform float u_lens_distance;
+uniform float u_lens_radius;
+
+uniform float u_gloss_blur_coeff;
+
+
+
+
 float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
 vec3 dir_light = normalize(vec3(1, -1, 1));
 vec3 dir_light_color = vec3(1);
 bool dir_light_shadow = false;
 
-
+//http://www.pbr-book.org/3ed-2018/Utilities/Main_Include_File.html
+const float Pi      = 3.14159265358979323846;
+const float InvPi   = 0.31830988618379067154;
+const float Inv2Pi  = 0.15915494309189533577;
+const float Inv4Pi  = 0.07957747154594766788;
+const float PiOver2 = 1.57079632679489661923;
+const float PiOver4 = 0.78539816339744830961;
+const float Sqrt2   = 1.41421356237309504880;
 
 #define NUM_OBJECTS 5
 int numObjects = NUM_OBJECTS;
@@ -150,6 +176,41 @@ mat4 translateFromVec3(in vec3);
 mat4 rotationFromVec3(in vec3);
 mat4 invRotationFromVec3(in vec3);
 
+//http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#fragment-ProjectiveCameraProtectedData-1
+void thinLensRay(inout vec4 original_ray, inout vec3 ray_origin, float focal_distance, float lens_distance, float lens_radius){
+    
+    if(lens_radius > 0){
+        // Sample point on lens
+        
+        vec2 point = original_ray.xy * (-cam_pos.z/original_ray.z); // I see issues with this line in the future
+        vec2 diskPt;
+       if (point.x == 0 && point.y == 0) { 
+            diskPt = vec2(0);
+        } else {
+            float r ;
+            float theta;
+            if (abs(point.x) > abs(point.y)) {
+                r = point.x;
+                theta = PiOver4 *(point.y/point.x);
+            } else {     
+                r = point.y;
+                theta = PiOver2 - PiOver4 *(point.x/point.y);
+            }
+            diskPt = r * vec2(cos(theta), sin(theta));
+        }
+
+        diskPt *= lens_radius;
+
+        // Compute point on plane of focus
+        float ft = focal_distance/(original_ray.z);
+        vec3 pFocus = original_ray.xyz * ft + ray_origin;;
+
+        // update ray with lens effect
+        ray_origin = vec3(diskPt.x, diskPt.y, lens_distance);
+        original_ray = vec4(normalize(pFocus - ray_origin), original_ray.w);
+    }
+}
+
 
 
 void main() {
@@ -165,16 +226,22 @@ void main() {
     for(int p = 0; p < sample_frequency; p++) {  
         for(int q = 0; q < sample_frequency; q++) {  
             float f_samp_freq = float(sample_frequency);
+           
             // Make rays offset uniform amounts from center (pg 310)
             vec2 sub_region = vec2((p+0.5)/f_samp_freq - 0.5, (q+0.5)/f_samp_freq - 0.5);
             vec2 random_shift = vec2(rand(gl_FragCoord.xy + 2*sub_region),rand(vec2(gl_FragCoord.xy + sub_region)))/f_samp_freq;
-             
+            
             vec2 sub_pixel = gl_FragCoord.xy + sub_region + vec2(random_shift)/f_samp_freq;
             
+            vec3 ray_origin = cam_pos;
             vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 0.001);
             
+            if (use_depth_of_field) {
+                //( original_ray,  ray_origin,  focal_distance, lens_distance, lens_radius)
+                thinLensRay( ray, ray_origin, u_focal_distance, u_lens_distance, u_lens_radius);
+            }
             // I would really like to make a centralized "object" struct, but oh well ¯\_(ツ)_/¯
-            color += iterativeDepthMarchRay(ray, cam_pos, maxDistance);
+            color += iterativeDepthMarchRay(ray, ray_origin, maxDistance);
             
             
 
@@ -281,7 +348,76 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
     vec4 output_color = vec4(0);    
     float color_fraction = 1.0;
     int i = 1;
-    for( i; i <= max_depth; i++) {
+    MaterialProperties mat_props;
+    int gloss_iterations = 8;
+
+    for( i; i <= max_recursive_depth; i++) {
+
+        if(color_fraction < 1.0){ // Within some reflection
+            
+            if(mat_props.glossiness > 0 ) { // Last hit object was glossy
+                
+                // Based off of http://web.cse.ohio-state.edu/~shen.94/681/Site/Slides_files/drt.pdf
+                //New orthonormal bases
+                vec3 u = cross(ray.xyz, vec3(0.,0.,1.)); // Ignoring degenerate case for now
+                vec3 v = cross(ray.xyz, u);
+
+                vec3 gloss_color = vec3(0);
+                for(int i=0; i < gloss_iterations; i++){
+                    float f_i = float(i);
+                    vec2 sq_pt = vec2(rand(vec2(24+f_i*13,5+f_i*7)+ray.xy*7),
+                                      rand(vec2(17-f_i*43,5-f_i*13)+ray.xy*41)); 
+                    /*
+                    float sqrt_y = sqrt(sq_pt.y);
+                    float _2pix = 2. * 3.14159256 * sq_pt.x;
+                    vec2 point_in_circle = vec2(sqrt_y * cos(_2pix), sqrt_y * sin(_2pix)); // Range 
+                    */
+
+                    vec2 perturbation = u_gloss_blur_coeff * (-1./2.0 + sq_pt);
+
+                    // Make new ray from old ray
+                    vec4 gloss_ray = vec4(normalize(ray.xyz + (perturbation.x * u + perturbation.y * v) * mat_props.glossiness), ray.w);
+
+                    // March new ray
+                    int object_hit = -1;
+                    marchRay(object_hit, gloss_ray, ray_start, max_dist);
+                    if(object_hit == -1) {
+                        // Hit nothing; show background color
+                        gloss_color += back_color.rgb; 
+                        continue; // Can't reflect....
+                    } 
+                    vec3 p_hit = ray_start + gloss_ray.xyz*gloss_ray.w;
+                    vec3 obj_normal = getNormal(p_hit, object_hit);
+
+                    // Shade/Lighting         
+                    float lighting_fraction[3]; // TODO use a constant to size...
+                    check_shadows(p_hit, obj_normal, lighting_fraction); // Just wanted to separate this part out, honestly;
+                    MaterialProperties reflect_mat_props = getMaterialProperties(object_hit);
+                    float reflectance = 1.0;
+
+                    if(reflect_mat_props.is_transparent) {
+                        reflectance =  calcFresnelSchlickApproximation(gloss_ray.xyz, obj_normal, 1.003, 1.5);
+                        
+                        if( reflectance < 0.95 ) {
+                            vec4 refracted_color = refractOnObject(gloss_ray, p_hit, obj_normal, object_hit );
+                            //return refracted_color;
+                            if(length(refracted_color - vec4(-1.)) < 0.01) { return vec4(0.8941, 0.9922, 0.0, 1.0);}//Error
+                            gloss_color += color_fraction * (1-reflectance) * refracted_color.xyz;
+                        } else {
+                            reflectance = 1.0;
+                        }
+                    }
+
+                    gloss_color += reflectance * shade(gloss_ray, p_hit, obj_normal, reflect_mat_props.color, reflect_mat_props.shininess, lighting_fraction);
+                
+                }
+                float f_gloss_iterations = float(gloss_iterations);
+                output_color += vec4(color_fraction * gloss_color / f_gloss_iterations, 1.);
+                color_fraction *= 0.0; // Terminate reflections at 0
+                break;
+            }
+        }
+
 
         int object_hit = -1;
         marchRay(object_hit, ray, ray_start, max_dist);
@@ -305,7 +441,7 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         
         
         // Shading
-        MaterialProperties mat_props = getMaterialProperties(object_hit);
+        mat_props = getMaterialProperties(object_hit);
         
         //vec4 refracted_color = vec4(0.);
 
@@ -314,14 +450,16 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         if(mat_props.is_transparent) {
             reflectance =  calcFresnelSchlickApproximation(ray.xyz, obj_normal, 1.003, 1.5);
             
-            if( reflectance < 0.99 ) {
+            if( reflectance < 0.95 ) {
                 vec4 refracted_color = refractOnObject(ray, p_hit, obj_normal, object_hit );
+                //return refracted_color;
                 if(length(refracted_color - vec4(-1.)) < 0.01) { return vec4(0.8941, 0.9922, 0.0, 1.0);}//Error
                 output_color += color_fraction * (1-reflectance) * refracted_color;
             } else {
                 reflectance = 1.0;
             }
         }
+
 
         output_color += reflectance * color_fraction * vec4(shade(ray, p_hit, obj_normal, mat_props.color, mat_props.shininess, lighting_fraction), 1.0);
         color_fraction *= mat_props.reflectiveness;
@@ -344,12 +482,16 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
 }
 
 
+
 vec4 refractOnObject(vec4 ray, vec3 ray_start, vec3 obj_normal, int object_inside){
     float eta = 1.003/1.5;
 
     float head_start = 0.01;
     vec4 refracted_ray = vec4(refract(ray.xyz, obj_normal, eta), head_start);
     if(refracted_ray.z < 0) {discard;}
+
+
+
 
     marchRefractedRay(object_inside, refracted_ray, ray_start);
     if( refracted_ray.w < 0) {return vec4(-1);}
@@ -359,6 +501,7 @@ vec4 refractOnObject(vec4 ray, vec3 ray_start, vec3 obj_normal, int object_insid
     vec3 new_normal = getNormal(new_ray_start, object_inside);
     vec4 new_ray = vec4(refract(ray.xyz, -new_normal, 1.0/eta), head_start);
     //new_ray.xyz = -new_ray.xyz; // Will be facing wrong way...? Maybe
+    //return vec4(new_ray.xy, new_ray.z/2, 1);
 
     int obj_in_refraction;
     marchRay(obj_in_refraction, new_ray, new_ray_start, maxDistance);
@@ -383,19 +526,19 @@ MaterialProperties getMaterialProperties(int obj_hit) {
 
         if (obj_hit == 0) {
             // Sphere
-            return MaterialProperties(sphere.color, sphere.shininess, sphere.reflectiveness, true);
+            return MaterialProperties(sphere.color, sphere.shininess, sphere.reflectiveness, sphere.is_transparent, sphere.glossiness);
         } else if (obj_hit == 1){
-            return MaterialProperties(plane.color, plane.shininess, plane.reflectiveness, false);
+            return MaterialProperties(plane.color, plane.shininess, plane.reflectiveness, false, plane.glossiness);
         } else if (obj_hit == 2){
-            return MaterialProperties(box.color, box.shininess, box.reflectiveness, false);
+            return MaterialProperties(box.color, box.shininess, box.reflectiveness, false, 0.0);
         } else if (obj_hit == 3){
-            return MaterialProperties(crateSDFInfo.color, crateSDFInfo.shininess, crateSDFInfo.reflectiveness, false);
+            return MaterialProperties(crateSDFInfo.color, crateSDFInfo.shininess, crateSDFInfo.reflectiveness, false, 0.0);
 
         } else if (obj_hit == 4){
-            return MaterialProperties(linkSDFInfo.color, linkSDFInfo.shininess, linkSDFInfo.reflectiveness, false);
+            return MaterialProperties(linkSDFInfo.color, linkSDFInfo.shininess, linkSDFInfo.reflectiveness, false, 0.0);
         } else { 
             // Error
-            return MaterialProperties(vec3(-1.), -1., -1., false);
+            return MaterialProperties(vec3(-1.), -1., -1., false, -1);
         }
 
 }
@@ -692,13 +835,9 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
                 float fj = float(j);
                 vec2 sub_region = vec2((fi+0.5) , (fj+0.5))/f_gs;
                 sub_region += vec2(rand(p_hit.xy * sub_region), rand(p_hit.yx * sub_region))/(2.*f_gs);
-                //float rand1 = rand(p_hit.xy + sub_region);
-                //float rand2 = rand(p_hit.yz + sub_region);
-
 
                 //f_color = vec4(j, k, p_hit.z / 10, 1);return;
-                //float rand1 = rand(p_hit.yz*p_hit.zx + vec2(fi,fj));
-                //float rand2 = rand(p_hit.zx*p_hit.yx + vec2(fi,fj));
+
                 // From https://developer.nvidia.com/gpugems/gpugems2/part-ii-shading-lighting-and-shadows/chapter-17-efficient-soft-edged-shadows-using
                 float sqrt_y = sqrt(sub_region.y);
                 float _2pix = 2. * 3.14159256 * sub_region.x;
