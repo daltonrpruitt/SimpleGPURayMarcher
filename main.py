@@ -271,6 +271,24 @@ class RayMarchingWindow(BasicWindow):
             idx_buffer
         )
 
+    def scene_operation(self, scene_num, operation="set"):
+        '''
+        I got tired of changing numbers everytime I wanted to see how something 
+        looked in a certain scene setup. Here are the setups to choose from:
+        0 : Sphere and box floating around  
+        '''
+        if scene_num == 0:
+            if operation == "set":
+                self.show_sphere = True
+                self.show_box = True
+                self.show_crate = False
+                self.show_link = False 
+
+                #self.prog['sphere.center'] = 0.
+            
+
+
+
     def key_event(self, key, action, modifiers):
     
         # Key presses
