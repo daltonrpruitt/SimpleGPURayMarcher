@@ -128,6 +128,7 @@ uniform bool use_depth_of_field;
 uniform float u_focal_distance;
 uniform float u_lens_distance;
 uniform float u_lens_radius;
+uniform int u_dof_samples;
 
 uniform float u_gloss_blur_coeff;
 
@@ -177,14 +178,16 @@ mat4 rotationFromVec3(in vec3);
 mat4 invRotationFromVec3(in vec3);
 
 //http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#fragment-ProjectiveCameraProtectedData-1
-void thinLensRay(inout vec4 original_ray, inout vec3 ray_origin, float focal_distance, float lens_distance, float lens_radius){
+void thinLensRay(inout vec4 original_ray, inout vec3 ray_origin, vec2 jitter){
     
-    if(lens_radius > 0){
+    if(u_lens_radius > 0){
         // Sample point on lens
         
         vec2 point = original_ray.xy * (-cam_pos.z/original_ray.z); // I see issues with this line in the future
+        point = vec2(rand(point*13+jitter*7), rand(point*39 + jitter*3));
         vec2 diskPt;
-       if (point.x == 0 && point.y == 0) { 
+
+        if (point.x == 0 && point.y == 0) { 
             diskPt = vec2(0);
         } else {
             float r ;
@@ -199,14 +202,14 @@ void thinLensRay(inout vec4 original_ray, inout vec3 ray_origin, float focal_dis
             diskPt = r * vec2(cos(theta), sin(theta));
         }
 
-        diskPt *= lens_radius;
+        diskPt *= u_lens_radius;
 
         // Compute point on plane of focus
-        float ft = focal_distance/(original_ray.z);
+        float ft = u_focal_distance/(original_ray.z);
         vec3 pFocus = original_ray.xyz * ft + ray_origin;;
 
         // update ray with lens effect
-        ray_origin = vec3(diskPt.x, diskPt.y, lens_distance);
+        ray_origin = vec3(diskPt.x, diskPt.y, ray_origin.z);
         original_ray = vec4(normalize(pFocus - ray_origin), original_ray.w);
     }
 }
@@ -236,18 +239,32 @@ void main() {
             vec3 ray_origin = cam_pos;
             vec4 ray = vec4(normalize(vec3((sub_pixel - window_size/2.0)/height*abs(cam_pos.z),-cam_pos.z)-cam_pos), 0.001);
             
+            vec4 dof_ray;
+            vec3 dof_ray_start;
+            vec4 dof_color = vec4(0);
+
             if (use_depth_of_field) {
-                //( original_ray,  ray_origin,  focal_distance, lens_distance, lens_radius)
-                thinLensRay( ray, ray_origin, u_focal_distance, u_lens_distance, u_lens_radius);
-            }
+                for(int i=0; i< u_dof_samples; i++){
+                    dof_ray = ray;
+                    dof_ray_start = ray_origin;
+                    //( original_ray,  ray_origin,  focal_distance, lens_distance, lens_radius)
+                    float fi = float(i);
+                    vec2 jitter = vec2(fi * Pi + sub_region.y*13, fi*17 + sub_region.x * height);                
+                    thinLensRay( dof_ray, dof_ray_start, jitter);
+                    dof_color += iterativeDepthMarchRay(dof_ray, dof_ray_start, maxDistance);
+                }
+                float samples = float(u_dof_samples);
+                color += vec4((dof_color/samples).rgb, 1.0);
+            } else {
             // I would really like to make a centralized "object" struct, but oh well ¯\_(ツ)_/¯
-            color += iterativeDepthMarchRay(ray, ray_origin, maxDistance);
+                color += iterativeDepthMarchRay(ray, ray_origin, maxDistance);
+            }
             
             
 
         }
     }
-    f_color = color/pow(sample_frequency,2.0);
+    f_color = vec4((color/pow(sample_frequency,2.0)).rgb, 1.0);
     
 
 }

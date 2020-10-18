@@ -41,24 +41,26 @@ class RayMarchingWindow(BasicWindow):
         )
         
         self.animate = False
+
         self.show_sphere = True
-        self.show_box = False
+        self.show_box = True
         self.show_crate = False
         self.show_link = True
         self.using_point_light = True
         self.using_direction_light = False
         self.using_sphere_light = False
 
-        self.antialiasing_sample_frequency = 2
-        self.use_depth_of_field = False
+        self.antialiasing_sample_frequency = 1
+        self.use_depth_of_field = True
 
         self.prog['u_gloss_blur_coeff'].value = 0.3
 
         self.lens_parameters = ['u_focal_distance', 'u_lens_distance','u_lens_radius']
         self.current_lens_paramter = self.lens_parameters[0]
-        self.prog['u_focal_distance'].value = 5
-        self.prog['u_lens_distance'].value = 1
-        self.prog['u_lens_radius'].value = 1
+        self.prog['u_focal_distance'].value = 13
+        #self.prog['u_lens_distance'].value = 1
+        self.prog['u_lens_radius'].value = 0.07
+        self.prog['u_dof_samples'].value = 20
 
         
         
@@ -87,7 +89,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['plane.shininess'].value = 16.0
         self.prog['plane.reflectiveness'].value = 0.5
         #self.prog['plane.is_transparent'].value = False
-        self.prog['plane.glossiness'].value = 0.6
+        self.prog['plane.glossiness'].value = 00.0
 
 
 
@@ -318,7 +320,6 @@ class RayMarchingWindow(BasicWindow):
         self.prog['height'].value = self.wnd.height
 
         #self.prog['crate_rotation'].value = (np.pi/4, time, np.pi/4)
-        self.prog['linkSDFInfo.position'] =  ( np.cos(time/2)*4, 0, 40 ) 
         
         self.vao.render()
 
@@ -327,10 +328,14 @@ class RayMarchingWindow(BasicWindow):
         
         if self.animate:
             if self.show_sphere:
-                self.prog['sphere.center'].value = (1, 0, 8.0 + np.sin(time/2) *2)#( np.cos(time/2)*2, np.sin(time/2)*3, 8.0 + np.sin(time/2) *2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+                self.prog['sphere.center'].value =(np.cos(time/2)*2, 0, 8.0 + np.sin(time/2) *2)  # (1, 0, 8.0 + np.sin(time/2) *2)    np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
             if self.show_box:
-                self.prog['box_center'].value = ( np.cos(time/2-np.pi)*2, 0, 8.0 + np.sin(time/2 ) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
-                self.prog['box_rotation'].value = (0, -time, 0)  #
+                self.prog['box_center'].value = ( np.cos(time/2-np.pi*2/3)*2, 0, 8.0 + np.sin(time/2 - np.pi*2/3) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
+                self.prog['box_rotation'].value = (time/3, -time/2, 0)  #
+            if self.show_link:
+                self.prog['linkSDFInfo.position'] =  ( np.cos(time/2+np.pi*2/3)*2, 0, 8.0 + np.sin(time/2 + np.pi*2/3) * 2)
+                self.prog['linkSDFInfo.rotation'] =  ( (np.pi/8, time, np.pi/8) ) 
+
             #self.prog['cam_pos'].value = (0, 1+ np.sin(time)*0.7, -5)
 
 
