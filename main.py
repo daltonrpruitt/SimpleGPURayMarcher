@@ -40,7 +40,9 @@ class RayMarchingWindow(BasicWindow):
 
         )
         
-        self.animate = False
+        self.animate = True
+        self.scene_number = 0
+        self.scene_time = 0
 
         self.show_sphere = True
         self.show_box = True
@@ -50,8 +52,8 @@ class RayMarchingWindow(BasicWindow):
         self.using_direction_light = False
         self.using_sphere_light = False
 
-        self.antialiasing_sample_frequency = 1
-        self.use_depth_of_field = True
+        self.antialiasing_sample_frequency = 3
+        self.use_depth_of_field = False
 
         self.prog['u_gloss_blur_coeff'].value = 0.3
 
@@ -108,9 +110,9 @@ class RayMarchingWindow(BasicWindow):
         link_res = 512
         self.link_scale = 1
 
-        offscreen_pos = (0, -100, -100)
+        self.offscreen_pos = (0, -100, -100)
 
-
+        self.hide_objects()
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0) #(1,1,1, 1)
 
@@ -148,20 +150,6 @@ class RayMarchingWindow(BasicWindow):
             member = self.prog[name]
             if name.find("link") > -1:
                 print(name, member.value)'''
-
-        if not self.show_sphere:
-            self.prog['sphere.center'].value = offscreen_pos
-
-        if not self.show_box:
-            self.prog['box_center'].value = offscreen_pos
-
-        if not self.show_crate:
-            self.prog['crate_center'].value = offscreen_pos
-
-        if not self.show_link:
-            self.prog['linkSDFInfo.position'].value = offscreen_pos
-
-
 
         vertices = np.array([
             -1, -1,
@@ -271,28 +259,103 @@ class RayMarchingWindow(BasicWindow):
             idx_buffer
         )
 
-    def scene_operation(self, scene_num, operation="set"):
+    def hide_objects(self):
+        if not self.show_sphere:
+            self.prog['sphere.center'].value = self.offscreen_pos
+
+        if not self.show_box:
+            self.prog['box_center'].value = self.offscreen_pos
+
+        if not self.show_crate:
+            self.prog['crate_center'].value = self.offscreen_pos
+
+        if not self.show_link:
+            self.prog['linkSDFInfo.position'].value = self.offscreen_pos
+
+
+
+
+    def set_scene(self, scene_num):
         '''
         I got tired of changing numbers everytime I wanted to see how something 
         looked in a certain scene setup. Here are the setups to choose from:
         0 : Sphere and box floating around  
         '''
         if scene_num == 0:
-            if operation == "set":
-                self.show_sphere = True
-                self.show_box = True
-                self.show_crate = False
-                self.show_link = False 
+            self.scene_number = 0
 
-                #self.prog['sphere.center'] = 0.
+            self.show_sphere = True
+            self.show_box = True
+            self.show_crate = False
+            self.show_link = False 
+            self.hide_objects()
             
+            self.prog['sphere.center'].value = (2, 0 , 8)
+            self.prog['box_center'].value = (-2, 0 , 8)
+
+        if scene_num == 1:
+            self.scene_number = 1
+
+            self.show_sphere = False
+            self.show_box = False
+            self.show_crate = True
+            self.show_link = True 
+            self.hide_objects()
+            self.prog['linkSDFInfo.position'].value = (2, 0 , 8)
+            self.prog['crate_center'].value = (-2, 0.5 , 8)
+       
+        if scene_num == 2:
+            self.scene_number = 2
+
+            self.show_sphere = True
+            self.show_box = False
+            self.show_crate = False    
+            self.show_link = True 
+            self.hide_objects()
+            self.scene_time = 0
+            self.prog['linkSDFInfo.position'].value = (0, 0 , -20)
+            self.prog['sphere.center'].value = (0, 0 , 8)
+
+            
+        
+
+
+    def animate_objects(self, i_time, frame_time):
+        '''
+        Moves stuff around according to which scene is active
+        '''
+        if self.scene_number == 0 :
+            self.prog['sphere.center'].value =(np.cos(i_time/2)*2, 0, 8.0 + np.sin(i_time/2) *2)  
+            self.prog['box_center'].value = ( np.cos(i_time/2-np.pi)*2, 0, 8.0 + np.sin(i_time/2 - np.pi) * 2)  
+            self.prog['box_rotation'].value = (i_time/3, -1*i_time/2, 0)  
+
+        if self.scene_number == 1:
+            self.prog['linkSDFInfo.rotation'].value =  ( (np.pi/8, i_time, np.pi/8) ) 
+            self.prog['crate_rotation'].value =  ( (np.pi/8, i_time, np.pi/8) ) 
+
+        if self.scene_number == 2:
+            self.scene_time += frame_time
+            self.prog['linkSDFInfo.position'].value =  (0, 0, -20 + (self.scene_time)**2 ) 
 
 
 
     def key_event(self, key, action, modifiers):
-    
+        
         # Key presses
         if action == self.wnd.keys.ACTION_PRESS:
+            if key == self.wnd.keys.A:
+                self.animate = not self.animate
+
+            if key == self.wnd.keys.F1:
+                self.set_scene(0)            
+                
+            if key == self.wnd.keys.F2:
+                self.set_scene(1)
+            
+            if key == self.wnd.keys.F3:
+                self.set_scene(2)
+
+
             if key == self.wnd.keys.NUMBER_1:
                 self.current_lens_paramter = self.lens_parameters[0]
                 print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
@@ -317,6 +380,45 @@ class RayMarchingWindow(BasicWindow):
            
             if key == self.wnd.keys.T:
                 self.prog['sphere.is_transparent'].value = not self.prog['sphere.is_transparent'].value
+           
+
+            if key == self.wnd.keys.G and not modifiers.shift and not modifiers.ctrl:
+                if self.prog['sphere.glossiness'].value < 1 :
+                    self.prog['sphere.glossiness'].value += 0.1
+                print("Sphere glossiness:", self.prog['sphere.glossiness'].value)
+
+            if key == self.wnd.keys.G and modifiers.shift and not modifiers.ctrl:
+                if self.prog['sphere.glossiness'].value > 0 :
+                    self.prog['sphere.glossiness'].value -= 0.1
+                print("Sphere glossiness:", self.prog['sphere.glossiness'].value)
+            
+
+            if key == self.wnd.keys.G and modifiers.ctrl and not modifiers.shift:
+                if self.prog['plane.glossiness'].value <  1 :
+                    self.prog['plane.glossiness'].value += 0.1
+                print("Plane glossiness:", self.prog['plane.glossiness'].value)
+
+            if key == self.wnd.keys.G and modifiers.ctrl and modifiers.shift:
+                if self.prog['plane.glossiness'].value > 0 :
+                    self.prog['plane.glossiness'].value -= 0.1
+                print("Plane glossiness:", self.prog['plane.glossiness'].value)
+
+
+
+            if key == self.wnd.keys.UP:
+                old_val = self.prog['sphere.center'].value
+                self.prog['sphere.center'].value = (old_val[0], old_val[1],old_val[2]+1)
+
+            if key == self.wnd.keys.DOWN:
+                old_val = self.prog['sphere.center'].value
+                self.prog['sphere.center'].value = (old_val[0], old_val[1],old_val[2]-1)   
+
+            if key == self.wnd.keys.S:
+                print("Switching soft shadows to", not self.prog['using_sphere_light'].value)
+                self.prog['using_sphere_light'].value = not self.prog['using_sphere_light'].value
+                self.prog['using_point_light'].value = not self.prog['using_point_light'].value
+
+
 
             # Using modifiers (shift and ctrl)
 
@@ -345,6 +447,8 @@ class RayMarchingWindow(BasicWindow):
         #self.prog['light'].value = (1, 3+np.cos(time/2)*4, 0 , 1)
         
         if self.animate:
+            self.animate_objects(time, frame_time)
+            '''
             if self.show_sphere:
                 self.prog['sphere.center'].value =(np.cos(time/2)*2, 0, 8.0 + np.sin(time/2) *2)  # (1, 0, 8.0 + np.sin(time/2) *2)    np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
             if self.show_box:
@@ -355,7 +459,7 @@ class RayMarchingWindow(BasicWindow):
                 self.prog['linkSDFInfo.rotation'] =  ( (np.pi/8, time, np.pi/8) ) 
 
             #self.prog['cam_pos'].value = (0, 1+ np.sin(time)*0.7, -5)
-
+            '''
 
 if __name__ == '__main__':
     RayMarchingWindow.run()
