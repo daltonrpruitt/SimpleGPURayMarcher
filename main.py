@@ -36,7 +36,7 @@ class RayMarchingWindow(BasicWindow):
                     
                 }
             ''',
-            fragment_shader=open("raymarch.frag", "r").read(),
+            fragment_shader=open("a4.frag", "r").read(),
 
         )
         
