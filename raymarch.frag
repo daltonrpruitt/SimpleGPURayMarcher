@@ -55,28 +55,19 @@ struct VoxelSDFInfo {
     vec3 color;
     float shininess;
     float reflectiveness;
+    bool is_transparent;
 };
 // Object Voxel SDF Array : Dim = (resolution + 2)^2 *(resolution + 2)    For later: https://community.khronos.org/t/dynamic-array-of-uniforms/63246/2
 uniform vec3 crate_center;
 uniform vec3 crate_rotation;
 uniform float crate_scale;
 
-VoxelSDFInfo crateSDFInfo = VoxelSDFInfo(0, crate_center, crate_rotation, crate_scale, vec3(0.7922, 0.549, 0.2275), 8.0,  0.0);
+VoxelSDFInfo crateSDFInfo = VoxelSDFInfo(0, crate_center, crate_rotation, crate_scale, vec3(0.7922, 0.549, 0.2275), 8.0,  0.0, false);
 layout(binding = 0) uniform sampler3D crate_sdf_texture;
 
 uniform VoxelSDFInfo linkSDFInfo;
 layout(binding = 1) uniform sampler3D link_sdf_texture;
-vec3 temp_color = linkSDFInfo.color;
-
-/*
-//Plane information
-vec3 plane_norm = normalize(vec3(0., 1, -.0));
-float plane_dist = 1;
-vec3 plane_color = vec3(0.2431, 0.7451, 0.0431);
-float plane_shininess = 16.0;
-float plane_reflectiveness = 0.9;
-float plane_glossiness = 0.5;
-*/
+//vec3 temp_color = linkSDFInfo.color;
 
 //Plane plane = Plane(plane_norm, plane_dist, plane_color, plane_shininess, plane_reflectiveness, plane_glossiness);
 uniform Plane plane;
@@ -131,6 +122,7 @@ uniform float u_lens_radius;
 uniform int u_dof_samples;
 
 uniform float u_gloss_blur_coeff;
+uniform int u_gloss_samples;
 
 
 
@@ -333,19 +325,10 @@ void marchRefractedRay(int object_inside, inout vec4 refracted_ray, in vec3 ray_
             refracted_ray.w += -sdf;
         }
 
-
-        /*
-        float plane_signed_dist = sdfPlane(plane, ray.xyz * ray.w + ray_start);
-        float box_signed_dist = sdfBox(box_dimensions, box_center, box_rotation, ray.xyz * ray.w + ray_start);
-        float crate_signed_dist = sdfVoxelSDF(crateSDFInfo , ray.xyz * ray.w + ray_start);
-        float link_signed_dist = sdfVoxelSDF(linkSDFInfo , ray.xyz * ray.w + ray_start);
-        */
-
     }
     refracted_ray.w = -1;
     return;
-    
-    
+
 }
 
 // Page 305 of Shirley and Marschner
@@ -366,7 +349,7 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
     float color_fraction = 1.0;
     int i = 1;
     MaterialProperties mat_props;
-    int gloss_iterations = 8;
+    //int gloss_iterations = 4;
 
     for( i; i <= max_recursive_depth; i++) {
 
@@ -380,7 +363,7 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
                 vec3 v = cross(ray.xyz, u);
 
                 vec3 gloss_color = vec3(0);
-                for(int i=0; i < gloss_iterations; i++){
+                for(int i=0; i < u_gloss_samples; i++){
                     float f_i = float(i);
                     vec2 sq_pt = vec2(rand(vec2(24+f_i*13,5+f_i*7)+ray.xy*7),
                                       rand(vec2(17-f_i*43,5-f_i*13)+ray.xy*41)); 
@@ -428,7 +411,7 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
                     gloss_color += reflectance * shade(gloss_ray, p_hit, obj_normal, reflect_mat_props.color, reflect_mat_props.shininess, lighting_fraction);
                 
                 }
-                float f_gloss_iterations = float(gloss_iterations);
+                float f_gloss_iterations = float(u_gloss_samples);
                 output_color += vec4(color_fraction * gloss_color / f_gloss_iterations, 1.);
                 color_fraction *= 0.0; // Terminate reflections at 0
                 break;
@@ -495,7 +478,8 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
         // Shoot transmission rays here
 
     }
-    return output_color / i;
+    float fi = float(i);
+    return output_color / fi;
 }
 
 
@@ -552,7 +536,7 @@ MaterialProperties getMaterialProperties(int obj_hit) {
             return MaterialProperties(crateSDFInfo.color, crateSDFInfo.shininess, crateSDFInfo.reflectiveness, false, 0.0);
 
         } else if (obj_hit == 4){
-            return MaterialProperties(linkSDFInfo.color, linkSDFInfo.shininess, linkSDFInfo.reflectiveness, false, 0.0);
+            return MaterialProperties(linkSDFInfo.color, linkSDFInfo.shininess, linkSDFInfo.reflectiveness, linkSDFInfo.is_transparent, 0.0);
         } else { 
             // Error
             return MaterialProperties(vec3(-1.), -1., -1., false, -1);
@@ -794,7 +778,7 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
         //   to construct the shadow feeler rays (now we're thinking with portals!)
         // This seems hacky to me, but eh, it'll have to do for now
 
-        int grid_size = 8;
+        int grid_size = 3;
         float f_gs = float(grid_size);
         int num_shadow_feelers = 0;
         int num_hit = 0;
