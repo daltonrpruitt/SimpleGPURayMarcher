@@ -5,7 +5,7 @@
 '''
 
 #import moderngl
-#import moderngl_window
+from moderngl_window import screenshot
 import numpy as np
 from window_setup import BasicWindow  # imports moderngl_window
 
@@ -40,7 +40,7 @@ class RayMarchingWindow(BasicWindow):
 
         )
         
-        self.animate = True
+        self.animate = False
         self.scene_number = 0
         self.scene_time = 0
 
@@ -48,21 +48,23 @@ class RayMarchingWindow(BasicWindow):
         self.show_box = True
         self.show_crate = False
         self.show_link = True
-        self.using_point_light = True
+        self.using_point_light = False
         self.using_direction_light = False
-        self.using_sphere_light = False
+        self.using_sphere_light = True
 
-        self.antialiasing_sample_frequency = 3
+        self.antialiasing_sample_frequency = 1
         self.use_depth_of_field = False
 
         self.prog['u_gloss_blur_coeff'].value = 0.3
+        self.prog['u_gloss_samples'].value = 5
+
 
         self.lens_parameters = ['u_focal_distance', 'u_lens_distance','u_lens_radius']
         self.current_lens_paramter = self.lens_parameters[0]
-        self.prog['u_focal_distance'].value = 13
+        self.prog['u_focal_distance'].value = 9
         #self.prog['u_lens_distance'].value = 1
-        self.prog['u_lens_radius'].value = 0.07
-        self.prog['u_dof_samples'].value = 20
+        self.prog['u_lens_radius'].value = 0.20
+        self.prog['u_dof_samples'].value = 4
 
         
         
@@ -74,7 +76,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['max_recursive_depth'].value = 5
         self.prog['use_depth_of_field'].value = self.use_depth_of_field
 
-        self.prog['sphere.center'].value = (0.0, 0, 7.0)
+        self.prog['sphere.center'].value = (1.7, 0, 3.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
         self.prog['sphere.shininess'].value = 32.0
@@ -97,7 +99,7 @@ class RayMarchingWindow(BasicWindow):
 
 
 
-        self.prog['box_center'].value = (-2, 0, 2.5)
+        self.prog['box_center'].value = (-1, 0, 1)
         self.prog['box_rotation'].value = (0, np.pi/4, 0) # Degrees
         
         # Crate SDF
@@ -116,11 +118,11 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0) #(1,1,1, 1)
 
-        self.prog['light'].value = (0., 2, 0., 1.)
+        self.prog['light'].value = (1., 2, 4., 1.)
         self.prog['light_color'].value = (1., 1., 1.)
 
 
-        self.prog['volLight.center'].value = (1.5, 5., 0.)
+        self.prog['volLight.center'].value = (2, 3., 0.)
         self.prog['volLight.radius'].value = 2.
         self.prog['volLight.color'].value = (1.0, 1.0, 1.0)
         #self.prog['volLight.intensity'].value = 1.0
@@ -137,14 +139,21 @@ class RayMarchingWindow(BasicWindow):
             if name.find("link") > -1:
                 print(name, member.value)'''
             
+
+        sphere_pos = self.prog['sphere.center'].value
+        cam_pos = self.prog['cam_pos'].value
+        line_to_sphere = (sphere_pos[0]- cam_pos[0], sphere_pos[1]- cam_pos[1], sphere_pos[2] - cam_pos[2])
+        link_to_sphere_ratio = 10
+        link_pos = tuple(line_to_sphere[i]*link_to_sphere_ratio + cam_pos[i] for i in range(len(line_to_sphere)))
         #self.prog['linkSDFInfo'].value = (1, (0, 1, 8), (0.,0.,0.), 1.0, (0.1, 0.5, 0.7),  4.0 )
         self.prog['linkSDFInfo.id'].value = 1
-        self.prog['linkSDFInfo.position'].value = (0.0, 0.0, 20.0) #(-1.5, 0.1, (1+5)*self.link_scale - 5)
+        self.prog['linkSDFInfo.position'].value = link_pos # (-1.5, 0.1, (1+5)*self.link_scale - 5)
         self.prog['linkSDFInfo.rotation'].value = (0, -np.pi/2, 0.)
         self.prog['linkSDFInfo.scale'].value =  self.link_scale
-        self.prog['linkSDFInfo.color'] =  (0.1, 0.5, 0.7)
+        self.prog['linkSDFInfo.color'] =  (0.2, 0.2, 0.7)
         self.prog['linkSDFInfo.shininess'] =  16.0
         self.prog['linkSDFInfo.reflectiveness'] =  0.9
+        self.prog['linkSDFInfo.is_transparent'] =  True
         #linksdf.reflectiveness=  0.0
         '''for name in self.prog:
             member = self.prog[name]
@@ -259,6 +268,13 @@ class RayMarchingWindow(BasicWindow):
             idx_buffer
         )
 
+        self.screenshot_buffer = self.ctx.screen
+        self.has_screenshot = False
+        self.take_screenshot = False
+
+        self.keep_rendering = True
+
+
     def hide_objects(self):
         if not self.show_sphere:
             self.prog['sphere.center'].value = self.offscreen_pos
@@ -343,6 +359,11 @@ class RayMarchingWindow(BasicWindow):
         
         # Key presses
         if action == self.wnd.keys.ACTION_PRESS:
+
+            if key == self.wnd.keys.Q:
+                self.keep_rendering = not self.keep_rendering
+
+
             if key == self.wnd.keys.A:
                 self.animate = not self.animate
 
@@ -369,10 +390,16 @@ class RayMarchingWindow(BasicWindow):
                 print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
 
             if key == self.wnd.keys.EQUAL:
-                self.prog[self.current_lens_paramter].value += 0.1
+                step = 0.1
+                if self.current_lens_paramter == self.lens_parameters[0]:
+                    step = 1
+                self.prog[self.current_lens_paramter].value += step
                 print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
             if key == self.wnd.keys.MINUS:
-                self.prog[self.current_lens_paramter].value -= 0.1
+                step = 0.1
+                if self.current_lens_paramter == self.lens_parameters[0]:
+                    step = 1
+                self.prog[self.current_lens_paramter].value -= step
                 print(self.current_lens_paramter,"=",self.prog[self.current_lens_paramter].value )
 
             if key == self.wnd.keys.SPACE:
@@ -413,11 +440,15 @@ class RayMarchingWindow(BasicWindow):
                 old_val = self.prog['sphere.center'].value
                 self.prog['sphere.center'].value = (old_val[0], old_val[1],old_val[2]-1)   
 
-            if key == self.wnd.keys.S:
+            if key == self.wnd.keys.S and not modifiers.ctrl:
                 print("Switching soft shadows to", not self.prog['using_sphere_light'].value)
                 self.prog['using_sphere_light'].value = not self.prog['using_sphere_light'].value
                 self.prog['using_point_light'].value = not self.prog['using_point_light'].value
 
+            if key == self.wnd.keys.S and modifiers.ctrl:
+                print("Screenshot Buffer is", type(self.screenshot_buffer))
+                #print("moderngl_window.screenshot is", type(screenshot))
+                screenshot.create(self.screenshot_buffer, file_format='png')
 
 
             # Using modifiers (shift and ctrl)
@@ -432,7 +463,10 @@ class RayMarchingWindow(BasicWindow):
         elif action == self.wnd.keys.ACTION_RELEASE:
             pass
         
-    def render(self, time, frame_time):
+    def render(self, run_time, frame_time):
+        if not self.keep_rendering:
+            return
+
         bc = self.prog['back_color'].value
         self.ctx.clear(bc[0], bc[1], bc[2], bc[3],)
         # Reset these uniforms here to resize the scene before rendering again
@@ -441,25 +475,23 @@ class RayMarchingWindow(BasicWindow):
 
         #self.prog['crate_rotation'].value = (np.pi/4, time, np.pi/4)
         
+        if not self.has_screenshot and self.take_screenshot:
+            print("Taking Screenshot")
+            start = time.time()
+
         self.vao.render()
+
+        if not self.has_screenshot and self.take_screenshot:
+            self.has_screenshot = True
+            screenshot.create(self.screenshot_buffer, file_format='png')           
+            print("Screenshot took " +"{:.3}".format(time.time() - start)+"s to create")
 
         #self.prog['crate_center'].value = (0, 0, 7+np.cos(time)*3 )
         #self.prog['light'].value = (1, 3+np.cos(time/2)*4, 0 , 1)
         
         if self.animate:
-            self.animate_objects(time, frame_time)
-            '''
-            if self.show_sphere:
-                self.prog['sphere.center'].value =(np.cos(time/2)*2, 0, 8.0 + np.sin(time/2) *2)  # (1, 0, 8.0 + np.sin(time/2) *2)    np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
-            if self.show_box:
-                self.prog['box_center'].value = ( np.cos(time/2-np.pi*2/3)*2, 0, 8.0 + np.sin(time/2 - np.pi*2/3) * 2)  #np.cos(time), np.sin(time*1.5), 10.0 + np.sin(time/2) * 5, 0.5
-                self.prog['box_rotation'].value = (time/3, -time/2, 0)  #
-            if self.show_link:
-                self.prog['linkSDFInfo.position'] =  ( np.cos(time/2+np.pi*2/3)*2, 0, 8.0 + np.sin(time/2 + np.pi*2/3) * 2)
-                self.prog['linkSDFInfo.rotation'] =  ( (np.pi/8, time, np.pi/8) ) 
-
-            #self.prog['cam_pos'].value = (0, 1+ np.sin(time)*0.7, -5)
-            '''
+            self.animate_objects(run_time, frame_time)
+ 
 
 if __name__ == '__main__':
     RayMarchingWindow.run()
