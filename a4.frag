@@ -20,7 +20,8 @@ struct Sphere {
 };
 
 struct Light {
-    vec3 point;
+    vec3 position;
+    vec3 direction;
     vec3 color;
     float intensity;
 };
@@ -34,8 +35,6 @@ struct SphereLight {
 
 // SphereLight volLight = SphereLight(vec3(1, 5, 2), 2., vec3(1), 1);
 uniform SphereLight volLight;
-
-
 
 
 struct Plane {
@@ -99,17 +98,21 @@ uniform float height;
 uniform Sphere sphere;
 
 uniform vec4 back_color;
+/*
 uniform vec4 light;
 uniform vec3 light_color;
-bool point_light_shadow = false;
+*/
+uniform Light point_light;
+uniform Light directional_light;
+//Light directional_light = Light(vec3(0), normalize(vec3(1, -1, 1)),vec3(1), 1);
+
+//bool point_light_shadow = false;
 
 uniform bool using_point_light;
 uniform bool using_dir_light;
 uniform bool using_sphere_light;
 
-
 out vec4 f_color;
-
 
 int march_iterations = 1024;
 uniform int max_recursive_depth;
@@ -129,9 +132,10 @@ uniform int u_gloss_samples;
 
 float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
-vec3 dir_light = normalize(vec3(1, -1, 1));
+/*vec3 dir_light = normalize(vec3(1, -1, 1));
 vec3 dir_light_color = vec3(1);
 bool dir_light_shadow = false;
+*/
 
 //http://www.pbr-book.org/3ed-2018/Utilities/Main_Include_File.html
 const float Pi      = 3.14159265358979323846;
@@ -667,7 +671,7 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
 
     // This if () { if () {    }} structure is due to the incompatibility of uniform bool and temp bool, apparently
     if(using_point_light){ if ( lighting_fraction[0] > 0.) {
-        vec3 vec_to_light = normalize(light.xyz - hit_point);
+        vec3 vec_to_light = normalize(point_light.position - hit_point);
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
         vec3 diffuse_color = point_light.color * point_light.intensity * lambertian * object_color;
@@ -682,10 +686,10 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         color += diffuse_color + specular_color; //* (1-shadow_fraction);
     }}
     if(using_dir_light) { if (lighting_fraction[1] > 0.) { 
-        vec3 vec_to_light = -dir_light;
+        vec3 vec_to_light = -directional_light.direction;
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
-        vec3 diffuse_color = dir_light_color * dir_light_intensity * lambertian * object_color;
+        vec3 diffuse_color = directional_light.color * directional_light.intensity * lambertian * object_color;
                           
         // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
         // Check if is actually reflecting the correct way
@@ -694,14 +698,14 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         //return vec3(e_dot_r);
-        vec3 specular_color = dir_light_color * dir_light_intensity * pow(e_dot_r, obj_shininess);
+        vec3 specular_color = directional_light.color * directional_light.intensity * pow(e_dot_r, obj_shininess);
         color += diffuse_color + specular_color ;//* (1-shadow_fraction); 
     } }
     if(using_sphere_light) { if (lighting_fraction[2] > 0) { 
-        vec3 vec_to_light = normalize(volLight.center.xyz - hit_point);
+        vec3 vec_to_light = normalize(volLight.center - hit_point);
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
-        vec3 diffuse_color = volLight.color *volLight.intensity* lambertian * object_color;
+        vec3 diffuse_color = volLight.color * volLight.intensity * lambertian * object_color;
                                 
         // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
         // Check if is actually reflecting the correct way
@@ -709,7 +713,7 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         //Above is effectively normalize(2.0 * dot(vec_to_light, norm) * norm - vec_to_light);
         vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
-        vec3 specular_color =  light_color * pow(e_dot_r, obj_shininess);
+        vec3 specular_color =  volLight.color * pow(e_dot_r, obj_shininess);
         color += lighting_fraction[2]*(diffuse_color + specular_color); 
     } }
 
@@ -741,8 +745,8 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
     float dist_to_light;
 
     if(using_point_light){
-        to_light = normalize(light.xyz - p_hit);
-        dist_to_light = length(light.xyz - p_hit)+1;
+        to_light = normalize(point_light.position - p_hit);
+        dist_to_light = length(point_light.position - p_hit)+1;
         vec4 shadow_ray = vec4(to_light, 0.001);
         int obj_in_way;
         marchRay(obj_in_way, shadow_ray, p_hit + 0.001*obj_normal, dist_to_light);
@@ -753,7 +757,7 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
 
     }
     if (using_dir_light) {
-        to_light = -1.0 * dir_light;
+        to_light = -1.0 * directional_light.direction;
         dist_to_light = maxDistance;
         vec4 shadow_ray = vec4(to_light, 0.001);
         int obj_in_way;
@@ -764,8 +768,8 @@ void check_shadows(in vec3 p_hit, in vec3 obj_normal, in out float lighting_frac
         }
     }
     if (using_sphere_light) {
-        to_light = normalize(volLight.center.xyz - p_hit);
-        dist_to_light = length(volLight.center.xyz - p_hit)+1;
+        to_light = normalize(volLight.center - p_hit);
+        dist_to_light = length(volLight.center - p_hit)+1;
 
         //vec3 perp_vec = 
         // 1. Get ratio b/w radius and distance

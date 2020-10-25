@@ -118,14 +118,23 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0) #(1,1,1, 1)
 
-        self.prog['light'].value = (1., 2, 4., 1.)
-        self.prog['light_color'].value = (1., 1., 1.)
+        self.prog['point_light.position'].value = (1., 2, 4.) 
+        self.prog['point_light.color'].value = (1., 1., 1.)
+        self.prog['point_light.intensity'].value = 1.
+        #self.prog['point_light.direction'].value = (0,0,0)
 
+        direction = (1., -1., -1.)
+        dist = np.sqrt(sum(x**2 for x in direction))
+        normalized_dir = tuple([d / dist for d in direction])
+        self.prog['directional_light.direction'].value = normalized_dir
+        self.prog['directional_light.color'].value = (1., 1., 1.)
+        self.prog['directional_light.intensity'].value = 1.
+        #self.prog['diretional_light.position'].value = (0,0,0)
 
         self.prog['volLight.center'].value = (2, 3., 0.)
         self.prog['volLight.radius'].value = 2.
         self.prog['volLight.color'].value = (1.0, 1.0, 1.0)
-        #self.prog['volLight.intensity'].value = 1.0
+        self.prog['volLight.intensity'].value = 1.0
 
         self.prog['cam_pos'].value = (0, 0, -5)
 
@@ -430,7 +439,12 @@ class RayMarchingWindow(BasicWindow):
                     self.prog['plane.glossiness'].value -= 0.1
                 print("Plane glossiness:", self.prog['plane.glossiness'].value)
 
-
+            if key == self.wnd.keys.L:
+                if not modifiers.ctrl:
+                    if not modifiers.shift:
+                        self.prog['point_light.intensity'].value += 0.5
+                    else: 
+                        self.prog['point_light.intensity'].value -= 0.5
 
             if key == self.wnd.keys.UP:
                 old_val = self.prog['sphere.center'].value
