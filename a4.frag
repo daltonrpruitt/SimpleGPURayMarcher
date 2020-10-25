@@ -670,7 +670,7 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         vec3 vec_to_light = normalize(light.xyz - hit_point);
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
-        vec3 diffuse_color = light_color * lambertian * object_color;
+        vec3 diffuse_color = point_light.color * point_light.intensity * lambertian * object_color;
                                 
         // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
         // Check if is actually reflecting the correct way
@@ -678,14 +678,14 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         //Above is effectively normalize(2.0 * dot(vec_to_light, norm) * norm - vec_to_light);
         vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
-        vec3 specular_color =  light_color * pow(e_dot_r, obj_shininess);
+        vec3 specular_color =  point_light.color * point_light.intensity * pow(e_dot_r, obj_shininess);
         color += diffuse_color + specular_color; //* (1-shadow_fraction);
     }}
     if(using_dir_light) { if (lighting_fraction[1] > 0.) { 
         vec3 vec_to_light = -dir_light;
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
-        vec3 diffuse_color = dir_light_color * lambertian * object_color;
+        vec3 diffuse_color = dir_light_color * dir_light_intensity * lambertian * object_color;
                           
         // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
         // Check if is actually reflecting the correct way
@@ -694,14 +694,14 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
         float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
         //return vec3(e_dot_r);
-        vec3 specular_color = dir_light_color * pow(e_dot_r, obj_shininess);
+        vec3 specular_color = dir_light_color * dir_light_intensity * pow(e_dot_r, obj_shininess);
         color += diffuse_color + specular_color ;//* (1-shadow_fraction); 
     } }
     if(using_sphere_light) { if (lighting_fraction[2] > 0) { 
         vec3 vec_to_light = normalize(volLight.center.xyz - hit_point);
         float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
         
-        vec3 diffuse_color = volLight.color * lambertian * object_color;
+        vec3 diffuse_color = volLight.color *volLight.intensity* lambertian * object_color;
                                 
         // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
         // Check if is actually reflecting the correct way
@@ -713,7 +713,7 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
         color += lighting_fraction[2]*(diffuse_color + specular_color); 
     } }
 
-    // maybe divide by number of lights being used before clamping?
+    // Do NOT Clamp so can do tone-mapping // maybe divide by number of lights being used before clamping?
     return clamp(color , vec3(0.), vec3(1.));
 }
 
