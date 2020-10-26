@@ -48,15 +48,19 @@ class RayMarchingWindow(BasicWindow):
         self.show_box = True
         self.show_crate = False
         self.show_link = True
-        self.using_point_light = False
+        self.using_point_light = True
         self.using_direction_light = False
-        self.using_sphere_light = True
+        self.using_sphere_light = False
 
         self.antialiasing_sample_frequency = 1
         self.use_depth_of_field = False
 
         self.prog['u_gloss_blur_coeff'].value = 0.3
         self.prog['u_gloss_samples'].value = 5
+
+        self.prog['tonemap_reinhard'].value = False
+        self.prog['tonemap_exposure'].value = False
+        self.prog['exposure'].value = 1
 
 
         self.lens_parameters = ['u_focal_distance', 'u_lens_distance','u_lens_radius']
@@ -65,7 +69,6 @@ class RayMarchingWindow(BasicWindow):
         #self.prog['u_lens_distance'].value = 1
         self.prog['u_lens_radius'].value = 0.20
         self.prog['u_dof_samples'].value = 4
-
         
         
         self.prog['width'].value = self.wnd.width
@@ -118,7 +121,7 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['back_color'].value = (0, 0.3, 0.9, 1.0) #(1,1,1, 1)
 
-        self.prog['point_light.position'].value = (1., 2, 4.) 
+        self.prog['point_light.position'].value = (1., 2, 1.) 
         self.prog['point_light.color'].value = (1., 1., 1.)
         self.prog['point_light.intensity'].value = 1.
         #self.prog['point_light.direction'].value = (0,0,0)
@@ -442,9 +445,39 @@ class RayMarchingWindow(BasicWindow):
             if key == self.wnd.keys.L:
                 if not modifiers.ctrl:
                     if not modifiers.shift:
-                        self.prog['point_light.intensity'].value += 0.5
+                        self.prog['point_light.intensity'].value *= 1.25
                     else: 
-                        self.prog['point_light.intensity'].value -= 0.5
+                        self.prog['point_light.intensity'].value /= 1.25
+                    print("Point Light Intensity =", round(self.prog['point_light.intensity'].value,2))
+                if modifiers.ctrl:
+                    if not modifiers.shift:
+                        self.prog['volLight.intensity'].value *= 1.25
+                    else: 
+                        self.prog['volLight.intensity'].value /= 1.25
+                    print("Volume Light Intensity =", round(self.prog['volLight.intensity'].value,2))
+
+
+            # Tone Mapping Commands
+            if key == self.wnd.keys.M:
+                if not modifiers.ctrl:
+                    if not modifiers.shift:
+                        self.prog['tonemap_reinhard'].value = not self.prog['tonemap_reinhard'].value 
+                    else:
+                        self.prog['tonemap_exposure'].value = not self.prog['tonemap_exposure'].value 
+                else:
+                    if self.prog['tonemap_reinhard'].value ^ self.prog['tonemap_exposure'].value:
+                        self.prog['tonemap_reinhard'].value = not self.prog['tonemap_reinhard'].value
+                        self.prog['tonemap_exposure'].value = not self.prog['tonemap_exposure'].value
+                print("Tonemapping : Reinghard =", self.prog['tonemap_reinhard'].value, "Exposure =", self.prog['tonemap_exposure'].value )
+
+
+
+            if key == self.wnd.keys.PERIOD:
+                self.prog['exposure'].value *= 1.5
+                print("Exposure =", round(self.prog['exposure'].value,2))
+            if key == self.wnd.keys.COMMA:
+                self.prog['exposure'].value /= 1.5
+                print("Exposure =", round(self.prog['exposure'].value,2))
 
             if key == self.wnd.keys.UP:
                 old_val = self.prog['sphere.center'].value

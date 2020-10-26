@@ -127,8 +127,9 @@ uniform int u_dof_samples;
 uniform float u_gloss_blur_coeff;
 uniform int u_gloss_samples;
 
-
-
+uniform bool tonemap_reinhard;
+uniform bool tonemap_exposure;
+uniform float exposure;
 
 float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
@@ -260,6 +261,15 @@ void main() {
 
         }
     }
+
+    // Both of these come from https://learnopengl.com/Advanced-Lighting/HDR
+    if (tonemap_reinhard) {
+        color.rgb = color.rgb / (color.rgb + vec3(1.0));
+    }
+    if (tonemap_exposure) {
+        color.rgb = vec3(1.0) - exp(-color.rgb * exposure);
+    }
+
     f_color = vec4((color/pow(sample_frequency,2.0)).rgb, 1.0);
     
 
@@ -430,6 +440,9 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
             output_color += back_color; 
             break; // Can't reflect....
         } 
+
+        if(object_hit == 4) {return vec4(linkSDFInfo.color, 1.0); } // Debug
+
 
         vec3 p_hit = ray_start + ray.xyz*ray.w;
         vec3 obj_normal = getNormal(p_hit, object_hit);
@@ -718,7 +731,7 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
     } }
 
     // Do NOT Clamp so can do tone-mapping // maybe divide by number of lights being used before clamping?
-    return clamp(color , vec3(0.), vec3(1.));
+    return color;
 }
 
 
