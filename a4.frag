@@ -30,6 +30,7 @@ struct SphereLight {
     vec3 center;
     float radius;
     vec3 color;
+    vec3 specular_color;
     float intensity;
 };
 
@@ -734,6 +735,30 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
     return color;
 }
 
+
+vec3 shadeCookTorrance(vec4 original_ray, vec3 hit_point, vec3 normal) {
+    vec3 color = ambient_coeff * sphere.color;
+
+    float roughness = 0.6;
+
+    vec3 vec_to_light = normalize(point_light.position - hit_point);
+    float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
+    
+    vec3 diffuse_color = point_light.color * point_light.intensity * lambertian * sphere.color;
+                            
+    // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
+    // Check if is actually reflecting the correct way
+    vec3 reflected_vec = reflect(-vec_to_light, normal);
+    //Above is effectively normalize(2.0 * dot(vec_to_light, norm) * norm - vec_to_light);
+    vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
+    float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
+    vec3 specular_color =  point_light.color * point_light.intensity * pow(e_dot_r, sphere.shininess);
+
+    color += point_light.color * lambertian * (d * sphere.color + s * sphere.specular_color)
+    color += diffuse_color + specular_color; //* (1-shadow_fraction);
+
+    return color;
+}
 
 // Non-sorted array of floats
 int findMinInArray(float distances[NUM_OBJECTS]){

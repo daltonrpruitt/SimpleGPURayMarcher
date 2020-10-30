@@ -82,6 +82,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['sphere.center'].value = (1.7, 0, 3.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
+        self.prog['sphere.specular'].value = (0.2, 0.4, 0.7)
         self.prog['sphere.shininess'].value = 32.0
         self.prog['sphere.reflectiveness'].value = 0.4
         self.prog['sphere.is_transparent'].value = False
