@@ -132,6 +132,8 @@ uniform bool tonemap_reinhard;
 uniform bool tonemap_exposure;
 uniform float exposure;
 
+uniform bool use_CT;
+
 float ambient_coeff = 0.1;
 float maxDistance = 1.0e3;
 /*vec3 dir_light = normalize(vec3(1, -1, 1));
@@ -154,6 +156,9 @@ int findMinInArray(float[NUM_OBJECTS]);
 
 float rand(vec2);
 vec3 shade(vec4, vec3, vec3, vec3, float, float[3]);
+vec3 shadeCookTorrance(vec4, vec3, vec3 );
+
+
 float sdfSphere(Sphere, vec3);
 float sdfPlane(Plane, vec3);
 float sdfBox(vec3, vec3, vec3, vec3);
@@ -478,8 +483,12 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
             }
         }
 
+        if(object_hit == 0 && use_CT) {
+            output_color += reflectance * color_fraction * vec4(shadeCookTorrance(ray, p_hit, obj_normal), 1.0);
 
-        output_color += reflectance * color_fraction * vec4(shade(ray, p_hit, obj_normal, mat_props.color, mat_props.shininess, lighting_fraction), 1.0);
+        } else {
+            output_color += reflectance * color_fraction * vec4(shade(ray, p_hit, obj_normal, mat_props.color, mat_props.shininess, lighting_fraction), 1.0);
+        }
         color_fraction *= mat_props.reflectiveness;
 
         // Multiply by Fresnel, as well..?
@@ -735,27 +744,39 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
     return color;
 }
 
-
+// https://graphicscompendium.com/gamedev/15-pbr#:~:text=In%201982%2C%20Robert%20Cook%20and,with%20equations%20of%20your%20choice.
 vec3 shadeCookTorrance(vec4 original_ray, vec3 hit_point, vec3 normal) {
     vec3 color = ambient_coeff * sphere.color;
 
     float roughness = 0.6;
-
+    float d = 0.3;
     vec3 vec_to_light = normalize(point_light.position - hit_point);
-    float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
-    
-    vec3 diffuse_color = point_light.color * point_light.intensity * lambertian * sphere.color;
-                            
-    // Reflected Light (Negative because shadow ray pointing away from surface) Shirley & Marschner pg.238
-    // Check if is actually reflecting the correct way
-    vec3 reflected_vec = reflect(-vec_to_light, normal);
-    //Above is effectively normalize(2.0 * dot(vec_to_light, norm) * norm - vec_to_light);
     vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
-    float e_dot_r = max(dot(e_vec, reflected_vec), 0.0);
-    vec3 specular_color =  point_light.color * point_light.intensity * pow(e_dot_r, sphere.shininess);
+    vec3 reflected_vec = reflect(-vec_to_light, normal);
+    vec3 h = (e_vec + reflected_vec) / 2.0;
+    float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
 
-    color += point_light.color * lambertian * (d * sphere.color + s * sphere.specular_color)
-    color += diffuse_color + specular_color; //* (1-shadow_fraction);
+    //vec3 diffuse_color = point_light.color * point_light.intensity * lambertian * sphere.color;
+    
+    float alpha_squared = pow(roughness, 4.0);
+    float h_dot_n = dot(h, normal);
+    float e_dot_h = dot(e_vec, h);
+    float n_dot_e = dot(normal, e_vec);
+    
+
+    float D_blinn = 1.0 / (Pi * alpha_squared) * pow( h_dot_n , (2/alpha_squared - 2));
+
+    float g1 = 2 * h_dot_n * n_dot_e  / e_dot_h;
+    float g2 = g1 * lambertian / n_dot_e;
+
+
+    float G = min(1.0, min(g1, g2));
+    float F = calcFresnelSchlickApproximation(-e_vec, h, 1.5, 1);
+
+
+    float r_s = D_blinn * G * F / (4.0 * lambertian * n_dot_e);
+
+    color += point_light.color * lambertian * (d * sphere.color + (1.0 - d) * r_s);
 
     return color;
 }

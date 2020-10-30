@@ -62,6 +62,7 @@ class RayMarchingWindow(BasicWindow):
         self.prog['tonemap_exposure'].value = False
         self.prog['exposure'].value = 1
 
+        self.prog['use_CT'].value = False
 
         self.lens_parameters = ['u_focal_distance', 'u_lens_distance','u_lens_radius']
         self.current_lens_paramter = self.lens_parameters[0]
@@ -82,7 +83,6 @@ class RayMarchingWindow(BasicWindow):
         self.prog['sphere.center'].value = (1.7, 0, 3.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
-        self.prog['sphere.specular'].value = (0.2, 0.4, 0.7)
         self.prog['sphere.shininess'].value = 32.0
         self.prog['sphere.reflectiveness'].value = 0.4
         self.prog['sphere.is_transparent'].value = False
@@ -479,6 +479,12 @@ class RayMarchingWindow(BasicWindow):
             if key == self.wnd.keys.COMMA:
                 self.prog['exposure'].value /= 1.5
                 print("Exposure =", round(self.prog['exposure'].value,2))
+
+
+            if key == self.wnd.keys.B:
+                self.prog['use_CT'].value = not self.prog['use_CT'].value
+
+
 
             if key == self.wnd.keys.UP:
                 old_val = self.prog['sphere.center'].value
