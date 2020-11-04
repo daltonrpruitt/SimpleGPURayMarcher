@@ -52,7 +52,7 @@ class RayMarchingWindow(BasicWindow):
         self.using_direction_light = False
         self.using_sphere_light = False
 
-        self.antialiasing_sample_frequency = 1
+        self.antialiasing_sample_frequency = 2
         self.use_depth_of_field = False
 
         self.prog['u_gloss_blur_coeff'].value = 0.3
@@ -77,16 +77,20 @@ class RayMarchingWindow(BasicWindow):
         # self.prog['time'].value = 0
 
         self.prog['antialiasing_sample_frequency'].value = self.antialiasing_sample_frequency
-        self.prog['max_recursive_depth'].value = 5
+        self.prog['max_recursive_depth'].value = 3 
         self.prog['use_depth_of_field'].value = self.use_depth_of_field
 
         self.prog['sphere.center'].value = (1.7, 0, 3.0)
         self.prog['sphere.radius'].value = 1
         self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
+        self.prog['sphere.specular_color'].value = (0.5, 0.0, 1.0)
         self.prog['sphere.shininess'].value = 32.0
-        self.prog['sphere.reflectiveness'].value = 0.4
+        self.prog['sphere.reflectiveness'].value = 0.25
         self.prog['sphere.is_transparent'].value = False
         self.prog['sphere.glossiness'].value = 0.0
+        self.prog['sphere.roughness'].value = 0.5
+        self.prog['sphere.diffuse_coefficient'].value = 0.5
+        #self.prog['sphere.index_of_refraction'].value = 2.5
 
         plane_norm = np.array((0, 1,0))
         plane_norm = plane_norm / np.sqrt(plane_norm[0]**2+plane_norm[1]**2+plane_norm[2]**2)
@@ -480,10 +484,46 @@ class RayMarchingWindow(BasicWindow):
                 self.prog['exposure'].value /= 1.5
                 print("Exposure =", round(self.prog['exposure'].value,2))
 
-
+            #  Cook Torrance Commands
             if key == self.wnd.keys.B:
                 self.prog['use_CT'].value = not self.prog['use_CT'].value
 
+
+            if key == self.wnd.keys.R:
+                rough = self.prog['sphere.roughness']
+                if not modifiers.shift:
+                    if rough.value > 0.93:
+                        rough.value = 0.99
+                    else:
+                        rough.value += 0.05
+                else:
+                    if rough.value < 0.06:
+                        rough.value = 0.01
+                    else:
+                        rough.value -= 0.05
+                print("Sphere Roughness =", round(rough.value,2))
+
+
+            if key == self.wnd.keys.D:
+                diff = self.prog['sphere.diffuse_coefficient']
+                if not modifiers.shift:
+                    if diff.value > 0.93:
+                        diff.value = 0.99
+                    else:
+                        diff.value += 0.05
+                else:
+                    if diff.value < 0.06:
+                        diff.value = 0.01
+                    else:
+                        diff.value -= 0.05
+                print("Sphere Diffuse Coeff. =", round(diff.value,2))
+            
+            if key == self.wnd.keys.F:
+                if not modifiers.shift:
+                    self.prog['sphere.index_of_refraction'].value *= 1.07
+                else:
+                    self.prog['sphere.index_of_refraction'].value /= 1.07
+                print("Sphere Index of Refraction =", round(self.prog['sphere.index_of_refraction'].value,2))
 
 
             if key == self.wnd.keys.UP:

@@ -13,10 +13,14 @@ struct Sphere {
     vec3 center;
     float radius;
     vec3 color;
-    float shininess;
+    vec3 specular_color;
+    float shininess; 
     float reflectiveness;
     bool is_transparent;
     float glossiness;
+    float roughness;
+    float diffuse_coefficient;
+    float index_of_refraction;
 };
 
 struct Light {
@@ -447,7 +451,7 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
             break; // Can't reflect....
         } 
 
-        if(object_hit == 4) {return vec4(linkSDFInfo.color, 1.0); } // Debug
+        //if(object_hit == 4) {return vec4(linkSDFInfo.color, 1.0); } // Debug
 
 
         vec3 p_hit = ray_start + ray.xyz*ray.w;
@@ -748,35 +752,31 @@ vec3 shade(vec4 original_ray, vec3 hit_point, vec3 normal, vec3 object_color, fl
 vec3 shadeCookTorrance(vec4 original_ray, vec3 hit_point, vec3 normal) {
     vec3 color = ambient_coeff * sphere.color;
 
-    float roughness = 0.6;
-    float d = 0.3;
-    vec3 vec_to_light = normalize(point_light.position - hit_point);
-    vec3 e_vec = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way
-    vec3 reflected_vec = reflect(-vec_to_light, normal);
-    vec3 h = (e_vec + reflected_vec) / 2.0;
-    float lambertian = clamp(dot(vec_to_light, normal), 0.0, 1.0);
-
-    //vec3 diffuse_color = point_light.color * point_light.intensity * lambertian * sphere.color;
+    // float d = 0.3;
+    vec3 l = normalize(point_light.position - hit_point);
+    vec3 v = normalize(-1.0 * original_ray.xyz);  // negative so facing correct way (towards "eye")
+    vec3 reflected_vec = reflect(-l, normal);
+    vec3 h = normalize(v + l); // h is halfway between light direction and view direction
+    float lambertian = clamp(dot(l, normal), 0.0, 1.0);
     
-    float alpha_squared = pow(roughness, 4.0);
-    float h_dot_n = dot(h, normal);
-    float e_dot_h = dot(e_vec, h);
-    float n_dot_e = dot(normal, e_vec);
+    float alpha_squared = pow(sphere.roughness, 4.0);
+    float h_dot_n = clamp(dot(h, normal), 0.0, 1.0);
+    float v_dot_h = clamp(dot(v, h), 0.0, 1.0);
+    float n_dot_v = clamp(dot(normal, v), 0.0, 1.0);
     
+    // Blinn-Phong Normal Distribution Function      
+                    // clamp(h_dot_n, 0.0, 1.0) * 
+    float D_blinn =     1.0 / (Pi * alpha_squared) * pow( h_dot_n , (2.0/alpha_squared - 2.0));
 
-    float D_blinn = 1.0 / (Pi * alpha_squared) * pow( h_dot_n , (2/alpha_squared - 2));
+    float g1 = 2.0 * h_dot_n * n_dot_v  / v_dot_h;
+    float g2 = 2.0 * h_dot_n * lambertian  / v_dot_h; // g1 * lambertian / n_dot_v;
 
-    float g1 = 2 * h_dot_n * n_dot_e  / e_dot_h;
-    float g2 = g1 * lambertian / n_dot_e;
+    float G = min(1.0, max(min(g1, g2), 0.0));
+    float F = calcFresnelSchlickApproximation(-v, h, sphere.index_of_refraction, 1);
 
+    float r_s = D_blinn * G * F / max(4.0 * lambertian * n_dot_v, 0.001); 
 
-    float G = min(1.0, min(g1, g2));
-    float F = calcFresnelSchlickApproximation(-e_vec, h, 1.5, 1);
-
-
-    float r_s = D_blinn * G * F / (4.0 * lambertian * n_dot_e);
-
-    color += point_light.color * lambertian * (d * sphere.color + (1.0 - d) * r_s);
+    color += point_light.color * point_light.intensity * lambertian * (sphere.diffuse_coefficient * sphere.color + (1.0 - sphere.diffuse_coefficient) * r_s * sphere.specular_color);
 
     return color;
 }

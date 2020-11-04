@@ -1,6 +1,7 @@
 # Large files that do not need to be saved
 SDFs/*
 A3 Pictures/*
+A4 Pictures/*
 .idea/workspace-*
 main-*.py
 
