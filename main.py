@@ -55,7 +55,7 @@ class RayMarchingWindow(BasicWindow):
         self.antialiasing_sample_frequency = 2
         self.use_depth_of_field = False
 
-        self.prog['u_gloss_blur_coeff'].value = 0.3
+        self.prog['u_gloss_blur_coeff'].value = 0.2
         self.prog['u_gloss_samples'].value = 5
 
         self.prog['tonemap_reinhard'].value = False
@@ -82,10 +82,10 @@ class RayMarchingWindow(BasicWindow):
 
         self.prog['sphere.center'].value = (1.7, 0, 3.0)
         self.prog['sphere.radius'].value = 1
-        self.prog['sphere.color'].value = (1.0, 0.0, 0.0)
-        self.prog['sphere.specular_color'].value = (0.5, 0.0, 1.0)
+        self.prog['sphere.color'].value = (0.6902, 0.5529, 0.3412)#(1.0, 0.0, 0.0)
+        self.prog['sphere.specular_color'].value = (0.6902, 0.5529, 0.3412)
         self.prog['sphere.shininess'].value = 32.0
-        self.prog['sphere.reflectiveness'].value = 0.25
+        self.prog['sphere.reflectiveness'].value = 0.1 #0.25
         self.prog['sphere.is_transparent'].value = False
         self.prog['sphere.glossiness'].value = 0.0
         self.prog['sphere.roughness'].value = 0.5
@@ -94,7 +94,6 @@ class RayMarchingWindow(BasicWindow):
 
         plane_norm = np.array((0, 1,0))
         plane_norm = plane_norm / np.sqrt(plane_norm[0]**2+plane_norm[1]**2+plane_norm[2]**2)
-        print(plane_norm)
         self.prog['plane.normal'].value = tuple(plane_norm)
         self.prog['plane.distance'].value = 1
         self.prog['plane.color'].value = (0.2431, 0.7451, 0.0431)
@@ -124,7 +123,7 @@ class RayMarchingWindow(BasicWindow):
 
         self.hide_objects()
 
-        self.prog['back_color'].value = (0, 0.3, 0.9, 1.0) #(1,1,1, 1)
+        self.prog['back_color'].value = (0,0,0,0) #(1,1,1, 1) #(0, 0.3, 0.9, 1.0)
 
         self.prog['point_light.position'].value = (1., 2, 1.) 
         self.prog['point_light.color'].value = (1., 1., 1.)

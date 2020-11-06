@@ -431,8 +431,14 @@ vec4 iterativeDepthMarchRay(inout vec4 ray, in vec3 ray_start, float max_dist){
                             reflectance = 1.0;
                         }
                     }
+                    if(object_hit == 0 && use_CT) {
+                        gloss_color += reflectance * shadeCookTorrance(gloss_ray, p_hit, obj_normal);
 
-                    gloss_color += reflectance * shade(gloss_ray, p_hit, obj_normal, reflect_mat_props.color, reflect_mat_props.shininess, lighting_fraction);
+                    } else {
+                        gloss_color += reflectance  * shade(gloss_ray, p_hit, obj_normal, mat_props.color, mat_props.shininess, lighting_fraction);
+                    }
+
+                    //gloss_color += reflectance * shade(gloss_ray, p_hit, obj_normal, reflect_mat_props.color, reflect_mat_props.shininess, lighting_fraction);
                 
                 }
                 float f_gloss_iterations = float(u_gloss_samples);
