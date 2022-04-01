@@ -10,7 +10,7 @@ mesh-to-sdf==0.0.12
 moderngl @ file:///D:/bld/moderngl_1591872866013/work
 moderngl-window==2.2.3
 multipledispatch==0.6.0
-numpy==1.19.1
+numpy==1.21.0
 Pillow>=9.0.1
 pyglet==1.5.7
 pylint==2.6.0
