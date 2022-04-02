@@ -16,7 +16,7 @@ pyglet==1.5.7
 pylint==2.6.0
 pynput==1.7.1
 pyrr==0.10.3
-PyYAML==5.3.1
+PyYAML==5.4
 six==1.15.0
 toml==0.10.1
 typed-ast==1.4.1
