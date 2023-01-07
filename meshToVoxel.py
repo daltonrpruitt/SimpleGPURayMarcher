@@ -7,7 +7,6 @@
 from mesh_to_sdf import mesh_to_voxels
 
 import trimesh
-import skimage.measure
 
 import time, os
 import numpy as np
