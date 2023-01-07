@@ -7,7 +7,7 @@ isort==5.4.2
 lazy-object-proxy==1.4.3
 mccabe==0.6.1
 mesh-to-sdf==0.0.12
-moderngl @ file:///D:/bld/moderngl_1591872866013/work
+moderngl>=5.7.4
 moderngl-window==2.2.3
 multipledispatch==0.6.0
 numpy==1.22.0
