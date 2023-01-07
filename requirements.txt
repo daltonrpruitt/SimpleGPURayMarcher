@@ -2,3 +2,4 @@ mesh-to-sdf==0.0.12
 moderngl>=5.7.4
 moderngl-window==2.2.3
 numpy>=1.22.0
+trimesh>=3.17.1
