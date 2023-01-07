@@ -1,5 +1,3 @@
-import moderngl
-import moderngl_window
 
 '''
     Renders a plaid triangle (animated)
